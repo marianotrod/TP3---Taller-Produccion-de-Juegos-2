@@ -1,4 +1,4 @@
-[gd_scene format=4 uid="uid://bpr2wjn0p21va"]
+[gd_scene format=4]
 
 [ext_resource type="Texture2D" uid="uid://dd8ubang0x12" path="res://assets/fondo/Tall Forest Files/Assets/Layers/back.png" id="1_vwj67"]
 [ext_resource type="PackedScene" uid="uid://benohryqp7hn0" path="res://scenes/personaje.tscn" id="1_wqn8j"]

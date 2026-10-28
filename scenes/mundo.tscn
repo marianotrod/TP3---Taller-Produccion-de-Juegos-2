@@ -20,6 +20,7 @@
 [ext_resource type="Texture2D" uid="uid://dosu0aqbijqy2" path="res://assets/UI/ps4 buttons/js.png" id="17_w7nu4"]
 [ext_resource type="Script" uid="uid://d4asd5wfk66wr" path="res://scripts/fin_demo_area.gd" id="18_541k4"]
 [ext_resource type="PackedScene" uid="uid://cmege67a3kf2w" path="res://scenes/pantalla_mensajes.tscn" id="19_c1ejn"]
+[ext_resource type="PackedScene" path="res://scenes/carcaj.tscn" id="20_carcaj"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_kxyy5"]
 shader = ExtResource("7_75jji")
@@ -300,60 +301,70 @@ position = Vector2(200, 53)
 
 [node name="enemigo" parent="." unique_id=191067378 instance=ExtResource("2_a2ps7")]
 position = Vector2(1544, 960)
+tiene_gorro = false
 
 [node name="enemigo2" parent="." unique_id=991685769 instance=ExtResource("2_a2ps7")]
 position = Vector2(2012, 960)
 
 [node name="enemigo3" parent="." unique_id=1790073819 instance=ExtResource("2_a2ps7")]
 position = Vector2(4420, 447)
+tiene_gorro = false
 
 [node name="enemigo4" parent="." unique_id=96832414 instance=ExtResource("2_a2ps7")]
 position = Vector2(4240, 703)
 
 [node name="enemigo5" parent="." unique_id=1603769884 instance=ExtResource("2_a2ps7")]
 position = Vector2(6123, 957)
+tiene_gorro = false
 
 [node name="enemigo6" parent="." unique_id=1319223295 instance=ExtResource("2_a2ps7")]
 position = Vector2(10715, 958)
 
 [node name="enemigo7" parent="." unique_id=1020008321 instance=ExtResource("2_a2ps7")]
 position = Vector2(11915, 958)
+tiene_gorro = false
 
 [node name="enemigo8" parent="." unique_id=1512272664 instance=ExtResource("2_a2ps7")]
 position = Vector2(13337, 952)
 
 [node name="enemigo9" parent="." unique_id=1779778293 instance=ExtResource("2_a2ps7")]
 position = Vector2(13717, 961)
+tiene_gorro = false
 
 [node name="enemigo10" parent="." unique_id=1738452059 instance=ExtResource("2_a2ps7")]
 position = Vector2(13095, 440)
 
 [node name="enemigo11" parent="." unique_id=515468950 instance=ExtResource("2_a2ps7")]
 position = Vector2(13777, 450)
+tiene_gorro = false
 
 [node name="enemigo12" parent="." unique_id=274432714 instance=ExtResource("2_a2ps7")]
 position = Vector2(15379, 950)
 
 [node name="enemigo13" parent="." unique_id=1900359460 instance=ExtResource("2_a2ps7")]
 position = Vector2(16162, 955)
+tiene_gorro = false
 
 [node name="enemigo14" parent="." unique_id=9819757 instance=ExtResource("2_a2ps7")]
 position = Vector2(15697, 697)
 
 [node name="enemigo15" parent="." unique_id=1375369648 instance=ExtResource("2_a2ps7")]
 position = Vector2(16208, 55)
+tiene_gorro = false
 
 [node name="enemigo16" parent="." unique_id=1892691936 instance=ExtResource("2_a2ps7")]
 position = Vector2(16890, 60)
 
 [node name="enemigo18" parent="." unique_id=1880712199 instance=ExtResource("2_a2ps7")]
 position = Vector2(20062, 573)
+tiene_gorro = false
 
 [node name="enemigo19" parent="." unique_id=325660767 instance=ExtResource("2_a2ps7")]
 position = Vector2(19589, 572)
 
 [node name="enemigo20" parent="." unique_id=1751181971 instance=ExtResource("2_a2ps7")]
 position = Vector2(19624, 957)
+tiene_gorro = false
 
 [node name="enemigo21" parent="." unique_id=479371429 instance=ExtResource("2_a2ps7")]
 position = Vector2(20176, 957)
@@ -469,5 +480,21 @@ script = ExtResource("18_541k4")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="FinDemoArea" unique_id=1092294638]
 position = Vector2(-30, 2)
 shape = SubResource("RectangleShape2D_c1ejn")
+
+[node name="CarcajDesmayante" parent="." unique_id=1711000001 instance=ExtResource("20_carcaj")]
+position = Vector2(4000, 472)
+tipo = "desmayante"
+
+[node name="CarcajLetal" parent="." unique_id=1711000002 instance=ExtResource("20_carcaj")]
+position = Vector2(6800, 728)
+tipo = "letal"
+
+[node name="CarcajDesmayante2" parent="." unique_id=1711000003 instance=ExtResource("20_carcaj")]
+position = Vector2(11400, 856)
+tipo = "desmayante"
+
+[node name="CarcajLetal2" parent="." unique_id=1711000004 instance=ExtResource("20_carcaj")]
+position = Vector2(17500, 344)
+tipo = "letal"
 
 [node name="PantallaMensajes" parent="." unique_id=1639516645 groups=["mensajes_ui"] instance=ExtResource("19_c1ejn")]

@@ -171,8 +171,10 @@ func _conectar_caminar_y_caer(espacio, c, id):
 				if nodos[otro].y > p.y + ESCALON_MAX and (destino == -1 or nodos[otro].y < nodos[destino].y):
 					destino = otro
 			if destino != -1:
-				var borde = Vector2(p.x + lado * PASO * 0.5, p.y)
-				if _paso_libre(espacio, p, borde):
+				# Tiene que caber el cuerpo al salir del borde y la caída tiene que estar libre
+				var borde = Vector2(p.x + lado * (PASO * 0.5 + ANCHO_ACTOR * 0.6), p.y)
+				var caida = espacio.intersect_ray(_consulta_rayo(borde - Vector2(0, 40), Vector2(borde.x, nodos[destino].y - 4)))
+				if _paso_libre(espacio, p, borde) and caida.is_empty():
 					_agregar_arista(id, destino, Tipo.CAER)
 				break
 
@@ -268,7 +270,7 @@ func _conectar_escaleras(escena):
 				continue
 			for id in columnas[col]:
 				var y = nodos[id].y
-				if y >= arriba - 100.0 and y <= abajo + 60.0:
+				if y >= arriba - 120.0 and y <= abajo + 130.0:
 					en_escalera.append(id)
 		en_escalera.sort_custom(func(a, b): return nodos[a].y < nodos[b].y)
 		# Unimos cada nivel con el siguiente (ignorando nodos al mismo nivel)

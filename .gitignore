@@ -3,3 +3,5 @@
 *.translation
 export_presets.cfg
 *.import/
+# Temporales del editor de Godot
+*.tmp

@@ -687,10 +687,11 @@ func seguir_ruta(delta, velocidad):
 	return false
 
 func reproducir_animacion(nombre_animacion):
-	if tiene_gorro:
-		anim.play(nombre_animacion)
+	var sin_gorro = nombre_animacion + "_sin_gorro"
+	if not tiene_gorro and anim.sprite_frames.has_animation(sin_gorro):
+		anim.play(sin_gorro)
 	else:
-		anim.play(nombre_animacion + "_sin_gorro")
+		anim.play(nombre_animacion)
 
 func actualizar_animaciones():
 	anim.flip_h = (direccion_x < 0)
