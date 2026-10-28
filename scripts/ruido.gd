@@ -16,6 +16,7 @@ const RADIO = {
 	"flecha_impacto": 300.0,
 	"distraccion": 480.0,
 	"humo": 350.0,
+	"disparo": 700.0,
 }
 
 var mostrar_circulos = true

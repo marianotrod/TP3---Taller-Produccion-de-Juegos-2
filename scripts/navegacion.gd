@@ -13,13 +13,15 @@ enum Tipo { CAMINAR, CAER, SALTAR, ESCALERA }
 
 const PASO = 32.0                # Ancho de columna del muestreo
 const PIES = 64.0                # Distancia del origen del enemigo a sus pies
-const ALTO_ACTOR = 93.0
-const ANCHO_ACTOR = 40.0
+const ALTO_ACTOR = 93.0          # Igual al cuerpo del enemigo (45 x 93)
+const ANCHO_ACTOR = 50.0         # Con un poco de margen para no rozar esquinas
 const ESCALON_MAX = 20.0         # Desnivel que se sube caminando
 const SALTO_ALTURA_MAX = 150.0   # Cuánto puede subir un enemigo de un salto
 const SALTO_COLUMNAS_MAX = 8     # Distancia horizontal máxima de un salto (en columnas)
 const SALTO_VX_MAX = 330.0
 const MARGEN_SALTO = 40.0        # Altura extra sobre el destino en la parábola
+const MARGEN_CABEZA = 24.0       # Espacio libre extra sobre la cabeza durante el salto
+const FALLOS_PARA_DESCARTAR = 2  # Saltos fallidos antes de desactivar esa conexión
 const GRAVEDAD_SUBIDA = 1800.0   # Iguales a las del enemigo
 const GRAVEDAD_BAJADA = 2200.0
 const Y_MIN = -1200.0
@@ -80,9 +82,11 @@ func construir():
 	for c in range(total_columnas):
 		for id in columnas[c]:
 			_conectar_caminar_y_caer(espacio, c, id)
+	_marcar_cerca_de_borde()
 	for c in range(total_columnas):
 		for id in columnas[c]:
-			_conectar_saltos(espacio, c, id)
+			if _cerca_de_borde.has(id):
+				_conectar_saltos(espacio, c, id)
 	_conectar_escaleras(escena)
 
 	listo = true
@@ -178,9 +182,31 @@ func _conectar_caminar_y_caer(espacio, c, id):
 					_agregar_arista(id, destino, Tipo.CAER)
 				break
 
-func _es_borde(espacio, c, id):
-	# Solo se salta desde bordes o frente a paredes, para no llenar el grafo de saltos
-	var p = nodos[id]
+var _cerca_de_borde = {}
+
+func _marcar_cerca_de_borde():
+	# Se salta desde bordes o frente a paredes y desde los 3 nodos previos:
+	# el nodo pegado a la pared suele no tener lugar para el cuerpo al despegar
+	_cerca_de_borde.clear()
+	var vecinos = {}
+	for clave in aristas:
+		if aristas[clave].tipo == Tipo.CAMINAR:
+			var partes = clave.split(":")
+			var a = int(partes[0])
+			vecinos[a] = vecinos.get(a, []) + [int(partes[1])]
+	for c in columnas:
+		for id in columnas[c]:
+			if _es_borde(c, id):
+				var frontera = [id]
+				for paso in range(4):
+					var siguiente = []
+					for n in frontera:
+						if not _cerca_de_borde.has(n):
+							_cerca_de_borde[n] = true
+							siguiente += vecinos.get(n, [])
+					frontera = siguiente
+
+func _es_borde(c, id):
 	for lado in [-1, 1]:
 		var tiene_vecino = false
 		if columnas.has(c + lado):
@@ -192,8 +218,6 @@ func _es_borde(espacio, c, id):
 	return false
 
 func _conectar_saltos(espacio, c, id):
-	if not _es_borde(espacio, c, id):
-		return
 	var p = nodos[id]
 	for lado in [-1, 1]:
 		for distancia in range(1, SALTO_COLUMNAS_MAX + 1):
@@ -232,7 +256,8 @@ func calcular_salto(desde, hasta):
 
 func _parabola_libre(espacio, desde, salto):
 	var forma = RectangleShape2D.new()
-	forma.size = Vector2(ANCHO_ACTOR, ALTO_ACTOR - 12.0)
+	# Margen extra para la cabeza: la física por pasos sube un poco menos que la parábola ideal
+	forma.size = Vector2(ANCHO_ACTOR, ALTO_ACTOR + MARGEN_CABEZA)
 	var q = PhysicsShapeQueryParameters2D.new()
 	q.shape = forma
 	q.collision_mask = 1
@@ -243,7 +268,7 @@ func _parabola_libre(espacio, desde, salto):
 		t = salto.t * i / pasos
 		var pos = desde + Vector2(salto.vx * t, _altura_en(salto.vy, t))
 		# Centro del cuerpo, levantado unos píxeles para no tocar el piso de salida/llegada
-		q.transform = Transform2D(0, pos - Vector2(0, ALTO_ACTOR * 0.5 + 6.0))
+		q.transform = Transform2D(0, pos - Vector2(0, (ALTO_ACTOR + MARGEN_CABEZA) * 0.5 + 3.0))
 		if not espacio.intersect_shape(q, 1).is_empty():
 			return false
 	return true
@@ -312,10 +337,15 @@ func nodo_mas_cercano(pies: Vector2, tolerancia_arriba = 40.0):
 				mejor = id
 	return mejor
 
+const DISTANCIA_MAX_DESTINO = 130.0
+
+# Devuelve [] si no hay forma de llegar al punto (por ejemplo, una plataforma inalcanzable)
 func calcular_ruta(desde_pies: Vector2, hasta_pies: Vector2) -> Array:
 	var a = nodo_mas_cercano(desde_pies)
 	var b = nodo_mas_cercano(hasta_pies, 200.0)
 	if a == -1 or b == -1:
+		return []
+	if nodos[b].distance_to(hasta_pies) > DISTANCIA_MAX_DESTINO:
 		return []
 	if a == b:
 		return [a]
@@ -323,6 +353,15 @@ func calcular_ruta(desde_pies: Vector2, hasta_pies: Vector2) -> Array:
 
 func arista(a, b):
 	return aristas.get("%d:%d" % [a, b], {})
+
+var fallos = {}
+
+# Un enemigo avisa que no pudo completar un salto; si se repite, se desactiva esa conexión
+func reportar_fallo(a, b):
+	var clave = "%d:%d" % [a, b]
+	fallos[clave] = fallos.get(clave, 0) + 1
+	if fallos[clave] >= FALLOS_PARA_DESCARTAR and astar.are_points_connected(a, b, false):
+		astar.disconnect_points(a, b, false)
 
 func nodos_cercanos(pies: Vector2, radio: float) -> Array:
 	var lista = []

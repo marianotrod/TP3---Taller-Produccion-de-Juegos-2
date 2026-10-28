@@ -21,6 +21,7 @@
 [ext_resource type="Script" uid="uid://d4asd5wfk66wr" path="res://scripts/fin_demo_area.gd" id="18_541k4"]
 [ext_resource type="PackedScene" uid="uid://cmege67a3kf2w" path="res://scenes/pantalla_mensajes.tscn" id="19_c1ejn"]
 [ext_resource type="PackedScene" path="res://scenes/carcaj.tscn" id="20_carcaj"]
+[ext_resource type="PackedScene" path="res://scenes/enemigo_rango.tscn" id="21_rango"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_kxyy5"]
 shader = ExtResource("7_75jji")
@@ -496,5 +497,14 @@ tipo = "desmayante"
 [node name="CarcajLetal2" parent="." unique_id=1711000004 instance=ExtResource("20_carcaj")]
 position = Vector2(17500, 344)
 tipo = "letal"
+
+[node name="tirador1" parent="." unique_id=1712000001 instance=ExtResource("21_rango")]
+position = Vector2(6820, 704)
+
+[node name="tirador2" parent="." unique_id=1712000002 instance=ExtResource("21_rango")]
+position = Vector2(14700, 64)
+
+[node name="tirador3" parent="." unique_id=1712000003 instance=ExtResource("21_rango")]
+position = Vector2(17500, 320)
 
 [node name="PantallaMensajes" parent="." unique_id=1639516645 groups=["mensajes_ui"] instance=ExtResource("19_c1ejn")]

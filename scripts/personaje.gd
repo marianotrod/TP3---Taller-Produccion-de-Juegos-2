@@ -18,6 +18,7 @@ const INTERVALO_PASOS_SIGILO = 0.5
 const VELOCIDAD_ATERRIZAJE_RUIDOSO = 450.0
 const VELOCIDAD_CAIDA_FUERTE = 1100.0
 const PIES = Vector2(0, 64)
+const MARGEN_VACIO = 60.0   # Píxeles debajo del límite inferior de la cámara antes de morir
 
 # --- INVENTARIO ---
 # LB (cambiar_arma): arrojables. RB (cambiar_melee): objetos.
@@ -390,6 +391,11 @@ func _physics_process(delta):
 		morir_por_caida()
 
 	procesar_ruido_movimiento(delta, velocidad_y_previa)
+
+	# Zona de muerte: si cae por debajo del borde inferior de la cámara, muere
+	if global_position.y > $Camera2D.limit_bottom + MARGEN_VACIO:
+		morir_en_vacio()
+		return
 
 	nivel_ocultamiento = 0
 	var arbol = get_tree()
@@ -895,6 +901,25 @@ func morir_por_caida():
 		ui_msg.mostrar_muerte("La caída fue demasiado alta.")
 	else:
 		await get_tree().create_timer(1.2).timeout
+		get_tree().reload_current_scene()
+
+func morir_en_vacio():
+	if esta_muerto:
+		return
+	esta_muerto = true
+	accion_bloqueante = true
+	velocity = Vector2.ZERO
+	cerrar_carrusel_por_muerte()
+	Sonido.reproducir("muerte_jugador")
+	anim.hide()
+	if enemigo_agarrado != null:
+		enemigo_agarrado.ser_soltado()
+		enemigo_agarrado = null
+	var ui_msg = get_tree().get_first_node_in_group("mensajes_ui")
+	if ui_msg:
+		ui_msg.mostrar_muerte("Caíste al vacío.")
+	else:
+		await get_tree().create_timer(1.0).timeout
 		get_tree().reload_current_scene()
 
 func cerrar_carrusel_por_muerte():

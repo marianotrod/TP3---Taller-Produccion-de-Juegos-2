@@ -31,6 +31,11 @@ const TIEMPO_SOLTADO = 2.5       # Cuánto tarda en reaccionar un rehén soltado
 const TIEMPO_REGENERAR = 10.0    # Sin recibir daño, recupera toda la vida
 const VIDA_MAX = 3
 const PIES = 64.0                # Distancia del origen a los pies (para la navegación)
+const LIMITE_CAIDA = 1500.0      # Más abajo de esto cayó del mapa
+const GOLPES_PUNO_DESMAYO = 3
+const EMPUJE_GOLPE = 180.0
+const EMPUJE_PUNO = 60.0
+const DISTANCIA_ATAQUE = Vector2(36, 50)   # Contacto con el que el guardia mata
 
 # --- EFECTOS VISUALES ---
 @export var escena_sangre: PackedScene
@@ -59,6 +64,10 @@ var estado_alerta = 0 # 0: Tranquilo, 1: Sospecha, 2: Alerta
 var nivel_sospecha = 0.0 # 0 a 100
 var jugador_en_vision = null # Guarda referencia al jugador si está en el cono
 var viendo_jugador = false
+var ultimo_punto_visto = null
+var marcador_interes: Node2D = null
+var golpes_puno = 0
+var timer_golpes_puno = 0.0
 
 # --- ATENCIÓN Y NAVEGACIÓN ---
 var punto_interes = null
@@ -96,6 +105,9 @@ func _ready():
 	cambiar_icono_estado("")
 
 func _physics_process(delta):
+	if global_position.y > LIMITE_CAIDA and estado_actual != Estado.MUERTO:
+		caer_al_vacio()
+		return
 	procesar_vision(delta)
 
 	if estado_actual == Estado.AGARRADO:
@@ -123,6 +135,9 @@ func _physics_process(delta):
 		return
 
 	tiempo_sin_dano += delta
+	timer_golpes_puno -= delta
+	if timer_golpes_puno <= 0.0:
+		golpes_puno = 0
 	if vida < VIDA_MAX and tiempo_sin_dano >= TIEMPO_REGENERAR:
 		vida = VIDA_MAX
 
@@ -229,7 +244,35 @@ func generar_sangre():
 # --- FUNCIONES DE VISIÓN ---
 
 func procesar_vision(delta):
+	var lo_veia = viendo_jugador
 	viendo_jugador = false
+	procesar_vision_jugador(delta)
+	if lo_veia and not viendo_jugador and ultimo_punto_visto != null and estado_actual in [Estado.AGRESIVO, Estado.SOSPECHANDO]:
+		perdio_de_vista()
+
+func perdio_de_vista():
+	# Deja un marcador en el último punto donde vio al jugador y va a revisarlo
+	colocar_marcador(ultimo_punto_visto)
+	punto_interes = ultimo_punto_visto
+	if estado_actual == Estado.SOSPECHANDO:
+		fase_sospecha = "yendo"
+		pedir_ruta(punto_interes)
+	else:
+		limpiar_ruta()
+
+func colocar_marcador(posicion):
+	quitar_marcador()
+	marcador_interes = Node2D.new()
+	marcador_interes.set_script(preload("res://scripts/marcador_interes.gd"))
+	get_parent().add_child(marcador_interes)
+	marcador_interes.global_position = posicion
+
+func quitar_marcador():
+	if marcador_interes and is_instance_valid(marcador_interes):
+		marcador_interes.queue_free()
+	marcador_interes = null
+
+func procesar_vision_jugador(delta):
 	if esta_herido or estado_actual in [Estado.MUERTO, Estado.DESMAYADO, Estado.AGARRADO, Estado.LEVANTANDOSE]:
 		return
 
@@ -237,6 +280,7 @@ func procesar_vision(delta):
 		var jugador = jugador_en_vision
 		viendo_jugador = true
 		punto_interes = jugador.global_position
+		ultimo_punto_visto = jugador.global_position
 
 		if estado_actual == Estado.AGRESIVO:
 			timer_alerta = TIEMPO_ALERTA
@@ -384,6 +428,7 @@ func bajar_alerta():
 	volver_a_patrulla()
 
 func volver_a_patrulla():
+	quitar_marcador()
 	estado_alerta = 0
 	nivel_sospecha = 0.0
 	punto_interes = null
@@ -463,6 +508,7 @@ func comportamiento_sospecha(delta):
 			if seguir_ruta(delta, SPEED_SOSPECHA):
 				fase_sospecha = "mirando"
 				tiempo_sospecha = 0.0
+				quitar_marcador()
 		"mirando":
 			velocity.x = 0
 			tiempo_sospecha += delta
@@ -475,15 +521,16 @@ func comportamiento_agresivo(delta):
 		return
 
 	if viendo_jugador:
-		var distancia = global_position.distance_to(jugador.global_position)
-		if distancia < 25.0:
+		var dif = jugador.global_position - global_position
+		if abs(dif.x) < DISTANCIA_ATAQUE.x and abs(dif.y) < DISTANCIA_ATAQUE.y:
 			velocity.x = 0
 			if jugador.has_method("morir"):
 				jugador.morir("Un guardia te ha descubierto y ejecutado.")
 			return
 		# Persecución: se recalcula la ruta seguido porque el jugador se mueve
 		timer_repath -= delta
-		if timer_repath <= 0 or ruta.is_empty():
+		var puede_recalcular = is_on_floor() and not nav_saltando and not nav_en_escalera
+		if (timer_repath <= 0 or ruta.is_empty()) and puede_recalcular:
 			timer_repath = 0.4
 			pedir_ruta(jugador.global_position)
 		if seguir_ruta(delta, SPEED_PERSECUCION):
@@ -510,7 +557,9 @@ func comportamiento_agresivo(delta):
 		if ruta.is_empty() or ruta_destino != punto_interes:
 			pedir_ruta(punto_interes)
 		if seguir_ruta(delta, SPEED_SOSPECHA):
+			# Llegó al marcador (o no puede llegar): lo descarta y busca alrededor
 			punto_interes = null
+			quitar_marcador()
 			timer_busqueda = randf_range(0.5, 1.2)
 		return
 
@@ -622,9 +671,20 @@ func seguir_ruta(delta, velocidad):
 			if nav_saltando:
 				nav_tiempo_salto += delta
 				velocity.x = datos.vx
+				if nav_tiempo_salto > datos.t + 0.8:
+					# Quedó trabado (por ejemplo en una esquina): recalcula
+					nav_saltando = false
+					Navegacion.reportar_fallo(a, b)
+					pedir_ruta(ruta_destino)
+					return false
 				if nav_tiempo_salto > 0.1 and is_on_floor():
 					nav_saltando = false
 					velocity.x = 0
+					if abs(pies.y - destino.y) > 40.0:
+						# Aterrizó en otro lado: avisa para que ese salto deje de usarse si se repite
+						Navegacion.reportar_fallo(a, b)
+						pedir_ruta(ruta_destino)
+						return false
 					ruta_idx += 1
 			else:
 				var origen = Navegacion.nodos[a]
@@ -760,17 +820,23 @@ func recibir_dano(atacante_x = null, arma = "cuchillo", golpe_final = false):
 		return
 	tiempo_sin_dano = 0.0
 
+	if arma == "puño":
+		# Cada golpe aturde sin quitar vida; al tercero (o al cerrar el combo) se desmaya.
+		# El primer golpe a un enemigo con casco además se lo saca.
+		tiene_gorro = false
+		golpes_puno += 1
+		timer_golpes_puno = 4.0
+		if golpe_final or golpes_puno >= GOLPES_PUNO_DESMAYO:
+			golpes_puno = 0
+			caer_desmayado()
+		else:
+			aturdir(atacante_x, EMPUJE_PUNO)
+		return
+
 	if tiene_gorro:
 		# El casco absorbe la primera agresión y se cae
 		tiene_gorro = false
 		aturdir(atacante_x)
-		return
-
-	if arma == "puño":
-		if golpe_final:
-			caer_desmayado()
-		else:
-			aturdir(atacante_x)
 		return
 
 	vida -= 1
@@ -780,7 +846,7 @@ func recibir_dano(atacante_x = null, arma = "cuchillo", golpe_final = false):
 	else:
 		aturdir(atacante_x)
 
-func aturdir(atacante_x = null):
+func aturdir(atacante_x = null, empuje = EMPUJE_GOLPE):
 	esta_herido = true
 	nivel_sospecha = 100.0
 	entrar_estado_alerta()
@@ -794,9 +860,9 @@ func aturdir(atacante_x = null):
 		var dir_empuje = sign(global_position.x - atacante_x)
 		if dir_empuje == 0:
 			dir_empuje = -direccion_x
-		velocity.x = dir_empuje * 180.0
+		velocity.x = dir_empuje * empuje
 	else:
-		velocity.x = -direccion_x * 180.0
+		velocity.x = -direccion_x * empuje
 
 	velocity.y = -300.0
 
@@ -807,6 +873,7 @@ func aturdir(atacante_x = null):
 	esta_herido = false
 
 func caer_desmayado():
+	quitar_marcador()
 	limpiar_ruta()
 	estado_actual = Estado.DESMAYADO
 	tiene_gorro = false
@@ -817,12 +884,21 @@ func caer_desmayado():
 	$CollisionShape2D.set_deferred("disabled", false)
 	reproducir_animacion("desmayado_idle")
 
+func caer_al_vacio():
+	quitar_marcador()
+	limpiar_ruta()
+	estado_actual = Estado.MUERTO
+	quitar_colision_de_cuerpo()
+	set_physics_process(false)
+	hide()
+
 func quitar_colision_de_cuerpo():
 	# El cadáver sigue apoyado en el piso, pero ya no lo tocan flechas ni ataques
 	set_deferred("collision_layer", 0)
 	jugador_en_vision = null
 
 func morir_general(animacion_caida):
+	quitar_marcador()
 	limpiar_ruta()
 	estado_actual = Estado.MUERTO
 	velocity.x = 0
@@ -848,6 +924,7 @@ func puede_recibir_takedown(posicion_jugador_x):
 	return false
 
 func ser_agarrado():
+	quitar_marcador()
 	abortar_escalera()
 	limpiar_ruta()
 	guardar_puesto()
@@ -869,6 +946,7 @@ func ser_desmayado():
 		reproducir_animacion("agarrado_desmayando_mantener")
 
 func ser_asesinado():
+	quitar_marcador()
 	estado_actual = Estado.MUERTO
 	cambiar_icono_estado("")
 	generar_sangre()
@@ -912,6 +990,7 @@ func actualizar_movimiento_agarrado(direccion_jugador, facing_left_jugador):
 		reproducir_animacion("agarrado")
 
 func ser_neutralizado():
+	quitar_marcador()
 	abortar_escalera()
 	limpiar_ruta()
 	estado_actual = Estado.MUERTO
