@@ -18,14 +18,14 @@ func _physics_process(delta):
 		move_and_slide()
 
 # --- SISTEMA DE DAÑO Y FLECHAS ---
-func recibir_dano():
+func recibir_dano(_atacante_x = null, _arma = null, _golpe_final = false):
 	if estado_actual == Estado.RECUPERANDO: return
 	
 	estado_actual = Estado.RECUPERANDO
 	anim.play("recibe_daño") 
 	revivir_despues_de_un_rato()
 
-func recibir_flechazo(tipo_flecha):
+func recibir_flechazo(tipo_flecha, _direccion = Vector2.ZERO):
 	if estado_actual == Estado.RECUPERANDO: return
 	
 	estado_actual = Estado.RECUPERANDO
