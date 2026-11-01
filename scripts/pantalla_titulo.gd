@@ -20,6 +20,7 @@ var esperando = false
 var tiempo = 0.0
 
 func _ready():
+	add_to_group("musica_pausa")
 	jugador = get_tree().get_first_node_in_group("jugador")
 	if ya_mostrado or jugador == null or _corriendo_pruebas():
 		queue_free()

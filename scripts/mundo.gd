@@ -8,9 +8,46 @@ extends Node2D
 var indice_tirador = -1
 var aviso_depuracion: Label = null
 
+var cartel_pausa: CanvasLayer = null
+
+func _ready():
+	add_to_group("nivel")
+	# La raíz procesa siempre (para poder salir de la pausa); el resto del nivel sí se pausa.
+	# Antes los hijos heredaban "siempre" y la pausa no detenía nada.
+	for hijo in get_children():
+		hacer_pausable(hijo)
+	# Lo que se crea durante el juego (flechas, balas, sangre, marcadores) también
+	child_entered_tree.connect(hacer_pausable)
+	crear_cartel_pausa()
+
+func hacer_pausable(nodo):
+	if nodo.process_mode == Node.PROCESS_MODE_INHERIT:
+		nodo.process_mode = Node.PROCESS_MODE_PAUSABLE
+
 func _process(_delta):
-	if Input.is_action_just_pressed("pausa"):
+	if Input.is_action_just_pressed("pausa") and not has_node("PantallaTitulo"):
 		get_tree().paused = not get_tree().paused
+		cartel_pausa.visible = get_tree().paused
+
+func crear_cartel_pausa():
+	cartel_pausa = CanvasLayer.new()
+	cartel_pausa.layer = 60
+	cartel_pausa.hide()
+	var fondo = ColorRect.new()
+	fondo.color = Color(0, 0, 0, 0.45)
+	fondo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cartel_pausa.add_child(fondo)
+	var texto = Label.new()
+	texto.text = "PAUSA"
+	texto.set_anchors_preset(Control.PRESET_FULL_RECT)
+	texto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	texto.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	texto.add_theme_font_override("font", load("res://fonts/Minecraft.ttf"))
+	texto.add_theme_font_size_override("font_size", 72)
+	texto.add_theme_color_override("font_outline_color", Color.BLACK)
+	texto.add_theme_constant_override("outline_size", 12)
+	cartel_pausa.add_child(texto)
+	add_child(cartel_pausa)
 
 func _unhandled_input(event):
 	if not OS.is_debug_build() or not (event is InputEventKey) or not event.pressed or event.is_echo():
@@ -25,7 +62,7 @@ func _unhandled_input(event):
 		mostrar_aviso("INVULNERABLE (F3)" if jugador.invulnerable else "")
 
 func ir_al_proximo_tirador(jugador):
-	var tiradores = get_tree().get_nodes_in_group("enemigo").filter(func(e): return e.has_method("direccion_8"))
+	var tiradores = get_tree().get_nodes_in_group("tirador")
 	if tiradores.is_empty():
 		return
 	indice_tirador = (indice_tirador + 1) % tiradores.size()

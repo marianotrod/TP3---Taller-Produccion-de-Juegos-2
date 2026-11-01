@@ -32,7 +32,7 @@ func _ready():
 	for i in range(3):
 		mundo.ir_al_proximo_tirador(j)
 		await get_tree().physics_frame
-		var cerca = get_tree().get_nodes_in_group("enemigo").filter(func(e): return e.has_method("direccion_8") and e.global_position.distance_to(j.global_position) < 700)
+		var cerca = get_tree().get_nodes_in_group("tirador").filter(func(e): return e.global_position.distance_to(j.global_position) < 700)
 		check(not cerca.is_empty(), "F2 lleva cerca del tirador %d" % (i + 1))
 	await captura("f2_tirador")
 

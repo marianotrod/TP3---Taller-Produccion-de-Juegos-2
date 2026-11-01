@@ -2,8 +2,8 @@ extends "res://scripts/enemigo.gd"
 
 # --- ENEMIGO CON ARCABUZ ---
 # Patrulla, oye y busca igual que el enemigo melee. En alerta, si ve al jugador
-# dentro del alcance, se detiene, apunta (con aviso visible) y dispara en una de
-# 8 direcciones. Entre disparos tiene un tiempo de recarga.
+# dentro del alcance, se detiene, apunta (con aviso visible) y dispara directo hacia él,
+# en cualquier ángulo. Entre disparos tiene un tiempo de recarga.
 
 const ESCENA_BALA = preload("res://scripts/bala.gd")
 
@@ -16,6 +16,10 @@ var timer_apuntado = -1.0
 var timer_recarga = 0.0
 var direccion_disparo = Vector2.RIGHT
 var fogonazo = 0.0
+
+func _ready():
+	super()
+	add_to_group("tirador")
 
 func _physics_process(delta):
 	timer_recarga -= delta
@@ -34,7 +38,7 @@ func comportamiento_agresivo(delta):
 			timer_apuntado = tiempo_apuntado
 			Sonido.reproducir("apuntar", global_position)
 		if timer_apuntado > tiempo_apuntado * (1.0 - FRACCION_SEGUIMIENTO):
-			direccion_disparo = direccion_8(jugador)
+			direccion_disparo = direccion_hacia(jugador)
 		timer_apuntado -= delta
 		if timer_apuntado <= 0.0:
 			disparar()
@@ -46,10 +50,9 @@ func comportamiento_agresivo(delta):
 func boca_del_arma():
 	return global_position + Vector2(direccion_x * 34.0, 8.0)
 
-func direccion_8(jugador):
-	var angulo = (jugador.global_position - boca_del_arma()).angle()
-	angulo = snapped(angulo, PI / 4.0)
-	return Vector2.RIGHT.rotated(angulo)
+func direccion_hacia(jugador):
+	# Apunta directo al cuerpo, en cualquier ángulo
+	return (jugador.global_position + Vector2(0, 10) - boca_del_arma()).normalized()
 
 func disparar():
 	timer_apuntado = -1.0

@@ -9,6 +9,7 @@ func _ready():
 	popup_boton.hide()
 	popup_boton.stop()
 	menu_interfaz.hide()
+	menu_interfaz.add_to_group("musica_pausa")
 	
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)

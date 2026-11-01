@@ -10,6 +10,7 @@ var tipo_actual = TipoMensaje.NINGUNO
 var puede_interactuar = false
 
 func _ready():
+	add_to_group("musica_pausa")
 	hide()
 	fondo_oscuro.modulate.a = 0.0
 

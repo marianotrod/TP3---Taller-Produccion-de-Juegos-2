@@ -32,11 +32,11 @@ func _ready():
 		await esperar(0.8)
 	check(e2.estado_actual == E.DESMAYADO and not e2.tiene_gorro, "3 golpes de puño desmayan al enemigo con casco (estado %s)" % E.keys()[e2.estado_actual])
 
-	# --- Tirador: demora, cooldown y 8 direcciones ---
+	# --- Tirador: demora, cooldown y puntería libre ---
 	var t = nodo("tirador1")
 	var disparos = []
 	var bala_script = preload("res://scripts/bala.gd")
-	# Jugador en el aire, a ~22° por encima de la horizontal: la dirección se redondea y las balas no lo tocan
+	# Jugador en el aire, a ~22° por encima de la horizontal (detrás de una plataforma: las balas no llegan)
 	j.global_position = t.global_position + Vector2(380, -150)
 	await get_tree().physics_frame
 	t.mirar_hacia(j.global_position.x)
@@ -50,7 +50,7 @@ func _ready():
 		for n in get_tree().current_scene.get_children():
 			if n.get_script() == bala_script and not balas_vistas.has(n):
 				balas_vistas[n] = true
-				disparos.append([reloj, n.direccion])
+				disparos.append([reloj, n.direccion, rad_to_deg((j.global_position + Vector2(0, 10) - t.boca_del_arma()).angle())])
 		if j.esta_muerto and not balas_vistas.has("muerte"):
 			balas_vistas["muerte"] = true
 			print("      murio en t=%.2f jugador=%s" % [reloj, j.global_position])
@@ -66,9 +66,10 @@ func _ready():
 		check(disparos[1][0] - disparos[0][0] >= 3.0, "cooldown entre disparos (%.2f s)" % (disparos[1][0] - disparos[0][0]))
 		var d = disparos[0][1]
 		var ang = rad_to_deg(d.angle())
-		check(is_equal_approx(fmod(abs(ang) + 0.001, 45.0), 0.001) or abs(fmod(abs(ang), 45.0)) < 0.01, "dirección en múltiplo de 45° (%.1f°)" % ang)
-	var msg = get_tree().current_scene.get_node("PantallaMensajes/Contenedor/Subtitulo").text
-	check(not j.esta_muerto or not "disparo" in msg, "con la dirección redondeada la bala no toca a la jugadora fuera de línea " + msg)
+		var resto = fposmod(ang, 45.0)
+		check(resto > 1.0 and resto < 44.0, "dirección libre, no redondeada a 45° (%.1f°)" % ang)
+		var esperado = disparos[0][2]
+		check(abs(ang - esperado) < 3.0, "el disparo apunta a la jugadora (%.1f° contra %.1f°)" % [ang, esperado])
 
 	# Jugadora en línea horizontal: el disparo la mata
 	j.global_position = t.global_position + Vector2(400, 0)

@@ -168,7 +168,7 @@ func _ready():
 	d.caer_desmayado()
 	# El guardia del cuchillazo pudo haberla matado al recuperarse: se la revive
 	j.esta_muerto = false
-	j.colision_parado.disabled = false
+	j.collision_layer = 2
 	j.global_position = c.global_position + Vector2(150, 0)
 	j.es_sigilo = false
 	await esperar(0.15)

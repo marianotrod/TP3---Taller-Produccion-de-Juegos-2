@@ -35,6 +35,10 @@ const ZONA_GOLPE_HASTA = Vector2(70, 50)
 
 # --- GOLPE MORTAL (feedback) ---
 const PAUSA_IMPACTO = 0.15        # Segundos reales en que el juego casi se congela al recibir el golpe
+const CONGELADO_MORTAL = 0.08     # Golpe mortal: congelado corto y después cámara lenta que se recupera
+const CAMARA_LENTA_MORTAL = 0.7   # Segundos reales hasta volver a la velocidad normal
+const EMPUJE_MUERTE = Vector2(300, -300)   # El golpe mortal la empuja hacia el lado contrario
+const FRENADO_MUERTE = 1600.0
 const ZOOM_MUERTE = 1.15
 const ESCENA_SANGRE = preload("res://scenes/efecto_sangre.tscn")
 
@@ -111,6 +115,13 @@ func _ready():
 
 func _physics_process(delta):
 	if esta_muerto:
+		if not anim.visible:
+			return   # Cayó al vacío
+		# Muerta sigue la física: vuela por el empujón del golpe y frena en el piso
+		if not is_on_floor():
+			velocity.y += gravity_down * delta
+		else:
+			velocity.x = move_toward(velocity.x, 0, FRENADO_MUERTE * delta)
 		move_and_slide()
 		return
 
@@ -670,7 +681,13 @@ func morir(razon_muerte: String = "Fuiste neutralizado.", desde = null, sonido =
 		mostrar_impacto(desde, sonido, true)
 	elif invulnerable:
 		return
-	_morir(razon_muerte, ["aterriza_en_el_piso", "aterriza_en_el_piso_danio"])
+	var empuje = Vector2.ZERO
+	if desde != null:
+		var lado = sign(global_position.x - desde.x)
+		if lado == 0:
+			lado = -1.0 if not facing_left else 1.0
+		empuje = Vector2(EMPUJE_MUERTE.x * lado, EMPUJE_MUERTE.y)
+	_morir(razon_muerte, ["aterriza_en_el_piso", "aterriza_en_el_piso_danio"], false, false, empuje)
 
 func mostrar_impacto(desde, sonido, mortal):
 	# Gira hacia quien la golpeó para que se lea de dónde vino
@@ -686,15 +703,18 @@ func mostrar_impacto(desde, sonido, mortal):
 	if mortal:
 		var tween = create_tween()
 		tween.tween_property($Camera2D, "zoom", Vector2.ONE * ZOOM_MUERTE, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	pausa_de_impacto()
+	pausa_de_impacto(mortal)
 
-func pausa_de_impacto():
+func pausa_de_impacto(mortal):
 	# Se mide con el reloj real: los timers de la escena dependen de la escala de tiempo
 	var escala_previa = Engine.time_scale
 	Engine.time_scale = 0.05
-	var fin = Time.get_ticks_msec() + int(PAUSA_IMPACTO * 1000.0)
+	var fin = Time.get_ticks_msec() + int((CONGELADO_MORTAL if mortal else PAUSA_IMPACTO) * 1000.0)
 	while Time.get_ticks_msec() < fin:
 		await get_tree().process_frame
+	if mortal:
+		# Cámara lenta mientras sale despedida, recuperando la velocidad de a poco
+		await en_tiempo_real(CAMARA_LENTA_MORTAL, func(t): Engine.time_scale = lerp(0.2, escala_previa, t * t))
 	Engine.time_scale = escala_previa
 
 func destello_rojo(intensidad):
@@ -733,12 +753,12 @@ func morir_por_caida():
 func morir_en_vacio():
 	_morir("Caíste al vacío.", [], true)
 
-func _morir(razon, animaciones, en_vacio = false, ruido_de_caida = false):
+func _morir(razon, animaciones, en_vacio = false, ruido_de_caida = false, empuje = Vector2.ZERO):
 	if esta_muerto:
 		return
 	esta_muerto = true
 	accion_bloqueante = true
-	velocity = Vector2.ZERO
+	velocity = empuje
 	inventario.cerrar_carrusel_sin_elegir()
 	if ruido_de_caida:
 		Ruido.emitir(global_position + PIES, "caida_fuerte", self)
@@ -750,9 +770,8 @@ func _morir(razon, animaciones, en_vacio = false, ruido_de_caida = false):
 			enemigo_agarrado.ser_soltado()
 			enemigo_agarrado = null
 	else:
-		colision_parado.set_deferred("disabled", true)
-		colision_sigilo.set_deferred("disabled", true)
-		colision_acostado.set_deferred("disabled", true)
+		# Sigue apoyada en el piso, pero guardias, conos y balas ya no la detectan
+		set_deferred("collision_layer", 0)
 
 	for nombre in animaciones:
 		anim.play(nombre)
