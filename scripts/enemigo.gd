@@ -43,6 +43,13 @@ const EMPUJE_PUNO = 60.0
 const DISTANCIA_ATAQUE = Vector2(36, 50)   # Contacto con el que el guardia mata
 const DISTANCIA_MAX_EMPUJE_MELEE = 70.0    # Un golpe cuerpo a cuerpo no lo aleja más que esto (sigue al alcance)
 const INTERVALO_REVISAR_CUERPOS = 0.2
+const ANCHO_EN_ESCALERA = 10.0
+
+# Conos de visión (el de patrulla es el de la escena). Puntos hacia la derecha; se espejan con la dirección.
+const CONO_SOSPECHA = [Vector2(0, -10), Vector2(480, -90), Vector2(480, 130)]
+const CONO_ALERTA = [Vector2(0, -10), Vector2(620, -220), Vector2(620, 200)]
+
+const Mapa = preload("res://scripts/mapa.gd")
 
 # --- EFECTOS VISUALES ---
 @export var escena_sangre: PackedScene
@@ -107,6 +114,7 @@ var timer_progreso = 0.0
 var pos_progreso = Vector2.ZERO
 var reintentos_ruta = 0
 var intentos_destino = 0
+var jugador_ref = null
 
 func _ready():
 	anim.animation_finished.connect(_on_animation_finished)
@@ -188,7 +196,7 @@ func _physics_process(delta):
 			check_ledge_grab()
 			if is_on_floor() and velocity.y >= 0:
 				estado_actual = Estado.PATRULLANDO
-				$CollisionShape2D.shape.size.x = ancho_colision_original
+				ancho_normal()
 		Estado.TREPANDO:
 			velocity.x = 20
 			velocity.y = -50
@@ -221,12 +229,27 @@ func _physics_process(delta):
 	actualizar_animaciones()
 	queue_redraw()
 
+func obtener_jugador():
+	if not is_instance_valid(jugador_ref):
+		jugador_ref = get_tree().get_first_node_in_group("jugador")
+	return jugador_ref
+
+# --- COLISIÓN ---
+# En escalera el cuerpo se angosta y deja de chocar con el mundo (capa 1)
+
+func ancho_normal():
+	$CollisionShape2D.shape.size.x = ancho_colision_original
+
+func modo_escalera(activo):
+	set_collision_mask_value(1, not activo)
+	$CollisionShape2D.shape.size.x = ANCHO_EN_ESCALERA if activo else ancho_colision_original
+
 # --- SEGURIDAD DE ESCALERA ---
 
 func abortar_escalera():
 	if estado_actual == Estado.EN_ESCALERA:
 		call_deferred("set_collision_mask_value", 1, true)
-		$CollisionShape2D.shape.size.x = ancho_colision_original
+		ancho_normal()
 
 # --- SISTEMA DE ICONO ESTADO ---
 
@@ -346,20 +369,13 @@ func puede_ver_jugador(jugador):
 
 func follaje_bloquea(desde, hasta):
 	# Un arbusto entre el enemigo y el jugador corta la línea de visión
-	var escena = get_tree().current_scene
-	if escena == null:
-		return false
-	var mapa = escena.get_node_or_null("TileMapLayer2")
-	if mapa == null:
-		return false
 	var distancia = desde.distance_to(hasta)
 	var pasos = int(distancia / 32.0)
 	for i in range(1, pasos):
 		var punto = desde.lerp(hasta, float(i) / pasos)
 		if punto.distance_to(desde) < 60.0 or punto.distance_to(hasta) < 60.0:
 			continue
-		var datos = mapa.get_cell_tile_data(mapa.local_to_map(mapa.to_local(punto)))
-		if datos and datos.get_custom_data("tipo_ocultamiento") == 2:
+		if Mapa.ocultamiento_en(self, punto) == 2:
 			return true
 	return false
 
@@ -451,9 +467,9 @@ func aplicar_cono():
 	# Patrulla: corto y hacia abajo. Sospecha: más amplio. Alerta: largo y ancho.
 	var puntos = poligono_patrulla
 	if estado_actual == Estado.SOSPECHANDO:
-		puntos = PackedVector2Array([Vector2(0, -10), Vector2(480, -90), Vector2(480, 130)])
+		puntos = PackedVector2Array(CONO_SOSPECHA)
 	elif estado_actual == Estado.AGRESIVO:
-		puntos = PackedVector2Array([Vector2(0, -10), Vector2(620, -220), Vector2(620, 200)])
+		puntos = PackedVector2Array(CONO_ALERTA)
 	cono_poligono.set_deferred("polygon", puntos)
 
 # --- CAMBIOS DE ESTADO ---
@@ -494,7 +510,7 @@ func entrar_estado_alerta():
 	estado_alerta = 2
 	estado_actual = Estado.AGRESIVO
 	nivel_sospecha = 100.0
-	var jugador = get_tree().get_first_node_in_group("jugador")
+	var jugador = obtener_jugador()
 	if jugador and punto_interes == null:
 		punto_interes = jugador.global_position
 	cambiar_icono_estado("alerta")
@@ -543,7 +559,7 @@ func oir_ruido(posicion, _radio):
 # --- COMPORTAMIENTOS ---
 
 func comportamiento_patrulla(_delta):
-	var jugador = get_tree().get_first_node_in_group("jugador")
+	var jugador = obtener_jugador()
 	if jugador and not jugador.esta_muerto:
 		var distancia = global_position.distance_to(jugador.global_position)
 		var dir_hacia_jugador = sign(jugador.global_position.x - global_position.x)
@@ -593,7 +609,7 @@ func comportamiento_sospecha(delta):
 				volver_a_patrulla()
 
 func comportamiento_agresivo(delta):
-	var jugador = get_tree().get_first_node_in_group("jugador")
+	var jugador = obtener_jugador()
 	if jugador == null:
 		return
 
@@ -690,8 +706,7 @@ func pedir_ruta(destino):
 
 func limpiar_ruta():
 	if nav_en_escalera:
-		set_collision_mask_value(1, true)
-		$CollisionShape2D.shape.size.x = ancho_colision_original
+		modo_escalera(false)
 	ruta = []
 	ruta_idx = 0
 	nav_saltando = false
@@ -784,8 +799,7 @@ func seguir_ruta(delta, velocidad):
 					nav_en_escalera = true
 					global_position.x = datos.x
 					velocity = Vector2.ZERO
-					set_collision_mask_value(1, false)
-					$CollisionShape2D.shape.size.x = 10.0
+					modo_escalera(true)
 			else:
 				velocity.x = 0
 				var objetivo_y = destino.y - PIES
@@ -794,8 +808,7 @@ func seguir_ruta(delta, velocidad):
 					global_position.y = objetivo_y - 2.0
 					velocity.y = 0
 					nav_en_escalera = false
-					set_collision_mask_value(1, true)
-					$CollisionShape2D.shape.size.x = ancho_colision_original
+					modo_escalera(false)
 					ruta_idx += 1
 				else:
 					velocity.y = sign(dy) * SPEED_ESCALERA_NAV
@@ -885,7 +898,7 @@ func actualizar_animaciones():
 func preparar_para_golpe():
 	abortar_escalera()
 	limpiar_ruta()
-	$CollisionShape2D.shape.size.x = ancho_colision_original
+	ancho_normal()
 	if estado_actual == Estado.TREPANDO:
 		$CollisionShape2D.set_deferred("disabled", false)
 
@@ -972,11 +985,15 @@ func caer_desmayado():
 	$CollisionShape2D.set_deferred("disabled", false)
 	reproducir_animacion("desmayado_idle")
 
-func caer_al_vacio():
+func entrar_muerte():
 	quitar_marcador()
 	limpiar_ruta()
 	estado_actual = Estado.MUERTO
+	cambiar_icono_estado("")
 	quitar_colision_de_cuerpo()
+
+func caer_al_vacio():
+	entrar_muerte()
 	set_physics_process(false)
 	hide()
 
@@ -986,13 +1003,9 @@ func quitar_colision_de_cuerpo():
 	jugador_en_vision = null
 
 func morir_general(animacion_caida):
-	quitar_marcador()
-	limpiar_ruta()
-	estado_actual = Estado.MUERTO
+	entrar_muerte()
 	velocity.x = 0
 	anim.flip_h = not anim.flip_h
-	cambiar_icono_estado("")
-	quitar_colision_de_cuerpo()
 	generar_sangre()
 	Sonido.reproducir("muerte_enemigo", global_position)
 	reproducir_animacion(animacion_caida)
@@ -1016,7 +1029,7 @@ func ser_agarrado():
 	abortar_escalera()
 	limpiar_ruta()
 	guardar_puesto()
-	$CollisionShape2D.shape.size.x = ancho_colision_original
+	ancho_normal()
 	estado_actual = Estado.AGARRADO
 	cambiar_icono_estado("")
 	$CollisionShape2D.set_deferred("disabled", true)
@@ -1024,7 +1037,7 @@ func ser_agarrado():
 	reproducir_animacion("agarrado")
 
 func ser_desmayado():
-	$CollisionShape2D.shape.size.x = ancho_colision_original
+	ancho_normal()
 	estado_actual = Estado.DESMAYADO
 	tiene_gorro = false
 	cambiar_icono_estado("dormido")
@@ -1077,20 +1090,6 @@ func actualizar_movimiento_agarrado(direccion_jugador, facing_left_jugador):
 	else:
 		reproducir_animacion("agarrado")
 
-func ser_neutralizado():
-	quitar_marcador()
-	abortar_escalera()
-	limpiar_ruta()
-	estado_actual = Estado.MUERTO
-	velocity = Vector2.ZERO
-	cambiar_icono_estado("")
-	quitar_colision_de_cuerpo()
-	generar_sangre()
-	reproducir_animacion("agarrado_matar")
-	await anim.animation_finished
-	reproducir_animacion("muerto")
-	set_physics_process(false)
-
 func recibir_flechazo(tipo_flecha, direccion_flecha = Vector2.ZERO):
 	preparar_para_golpe()
 
@@ -1127,7 +1126,7 @@ func despertarse():
 		return
 	if despertar_en_alerta:
 		despertar_en_alerta = false
-		var jugador = get_tree().get_first_node_in_group("jugador")
+		var jugador = obtener_jugador()
 		punto_interes = jugador.global_position if jugador else null
 		entrar_estado_alerta()
 	else:
@@ -1159,10 +1158,8 @@ func recibir_orden_marcador(orden, tiempo, marcador = null):
 			return
 
 		estado_actual = Estado.EN_ESCALERA
-		$CollisionShape2D.shape.size.x = 10.0
+		modo_escalera(true)
 		tiempo_en_escalera = 0.0
-
-		set_collision_mask_value(1, false)
 
 		var colision_escalera = marcador.get_node("CollisionShape2D")
 		global_position.x = colision_escalera.global_position.x
@@ -1188,8 +1185,7 @@ func ejecutar_trepada():
 
 func soltar_escalera():
 	if estado_actual == Estado.EN_ESCALERA and tiempo_en_escalera > 0.1:
-		set_collision_mask_value(1, true)
-		$CollisionShape2D.shape.size.x = ancho_colision_original
+		modo_escalera(false)
 
 		if direccion_escalera == -1:
 			estado_actual = Estado.SALTANDO

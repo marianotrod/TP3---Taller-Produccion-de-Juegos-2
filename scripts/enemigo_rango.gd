@@ -23,7 +23,7 @@ func _physics_process(delta):
 	super(delta)
 
 func comportamiento_agresivo(delta):
-	var jugador = get_tree().get_first_node_in_group("jugador")
+	var jugador = obtener_jugador()
 	if jugador and viendo_jugador and is_on_floor() and global_position.distance_to(jugador.global_position) <= alcance_disparo:
 		velocity.x = 0
 		limpiar_ruta()
