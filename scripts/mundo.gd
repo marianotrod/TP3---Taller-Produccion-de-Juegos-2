@@ -1,10 +1,12 @@
 extends Node2D
 
-# --- ATAJOS DE DEPURACIÓN (solo en versiones de desarrollo, no en la exportada) ---
+# --- ATAJOS DE DEPURACIÓN (activos también en la versión web, para que los use el equipo) ---
 # F1: círculos de ruido y conos de visión (en ruido.gd)
 # F2: lleva a la jugadora cerca del próximo tirador
 # F3: invulnerable (los golpes se muestran pero no matan)
 # Backspace: muestra/oculta las formas de colisión (como --debug-collisions)
+
+const ATAJOS_DEPURACION = true   # false para la versión final
 
 var indice_tirador = -1
 var aviso_depuracion: Label = null
@@ -51,7 +53,7 @@ func crear_cartel_pausa():
 	add_child(cartel_pausa)
 
 func _unhandled_input(event):
-	if not OS.is_debug_build() or not (event is InputEventKey) or not event.pressed or event.is_echo():
+	if not ATAJOS_DEPURACION or not (event is InputEventKey) or not event.pressed or event.is_echo():
 		return
 	if event.physical_keycode == KEY_BACKSPACE:
 		alternar_colisiones_visibles()

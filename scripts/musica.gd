@@ -32,6 +32,9 @@ func _ready():
 		var reproductor = AudioStreamPlayer.new()
 		reproductor.stream = load(PISTAS[nombre])
 		reproductor.volume_db = -80.0
+		# En la web Godot usa por defecto "samples", que no se llevan bien con arrancar antes de que
+		# el usuario toque algo ni con fundidos cuadro a cuadro: la música va por el mezclador normal.
+		reproductor.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 		add_child(reproductor)
 		reproductores[nombre] = reproductor
 	ultimo_us = Time.get_ticks_usec()
