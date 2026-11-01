@@ -22,6 +22,7 @@
 [ext_resource type="PackedScene" uid="uid://cmege67a3kf2w" path="res://scenes/pantalla_mensajes.tscn" id="19_c1ejn"]
 [ext_resource type="PackedScene" path="res://scenes/carcaj.tscn" id="20_carcaj"]
 [ext_resource type="PackedScene" path="res://scenes/enemigo_rango.tscn" id="21_rango"]
+[ext_resource type="PackedScene" path="res://scenes/pantalla_titulo.tscn" id="22_titulo"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_kxyy5"]
 shader = ExtResource("7_75jji")
@@ -508,3 +509,5 @@ position = Vector2(14700, 64)
 position = Vector2(17500, 320)
 
 [node name="PantallaMensajes" parent="." unique_id=1639516645 groups=["mensajes_ui"] instance=ExtResource("19_c1ejn")]
+
+[node name="PantallaTitulo" parent="." unique_id=1713000001 instance=ExtResource("22_titulo")]

@@ -1,0 +1,48 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/pantalla_titulo.gd" id="1_titulo"]
+[ext_resource type="Texture2D" path="res://assets/UI/TITLE.png" id="2_titulo"]
+[ext_resource type="FontFile" uid="uid://beo32a2h43lqy" path="res://fonts/Minecraft.ttf" id="3_fuente"]
+
+[node name="PantallaTitulo" type="CanvasLayer"]
+layer = 50
+script = ExtResource("1_titulo")
+
+[node name="Contenedor" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Imagen" type="TextureRect" parent="Contenedor"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -640.0
+offset_top = 170.0
+offset_right = 640.0
+offset_bottom = 682.0
+grow_horizontal = 2
+texture = ExtResource("2_titulo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Texto" type="Label" parent="Contenedor"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 780.0
+offset_bottom = 840.0
+grow_horizontal = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 12
+theme_override_fonts/font = ExtResource("3_fuente")
+theme_override_font_sizes/font_size = 44
+text = "Press a key to start"
+horizontal_alignment = 1
+vertical_alignment = 1

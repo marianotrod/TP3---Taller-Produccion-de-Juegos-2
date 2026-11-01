@@ -4,7 +4,12 @@ enum Estado { PATRULLANDO, SOSPECHANDO, AGRESIVO, MUERTO, AGARRADO, DESMAYADO, L
 
 var timer_marcador = 0.0
 var orden_pendiente = 0
-var estado_actual = Estado.PATRULLANDO
+var estado_actual = Estado.PATRULLANDO:
+	set(nuevo):
+		# Cada vez que queda muerto o desmayado es un "incidente" nuevo que los demás pueden descubrir
+		if nuevo in [Estado.MUERTO, Estado.DESMAYADO] and nuevo != estado_actual:
+			incidente += 1
+		estado_actual = nuevo
 
 const SPEED_PATRULLA = 100.0
 const SPEED_SOSPECHA = 150
@@ -36,6 +41,8 @@ const GOLPES_PUNO_DESMAYO = 3
 const EMPUJE_GOLPE = 180.0
 const EMPUJE_PUNO = 60.0
 const DISTANCIA_ATAQUE = Vector2(36, 50)   # Contacto con el que el guardia mata
+const DISTANCIA_MAX_EMPUJE_MELEE = 70.0    # Un golpe cuerpo a cuerpo no lo aleja más que esto (sigue al alcance)
+const INTERVALO_REVISAR_CUERPOS = 0.2
 
 # --- EFECTOS VISUALES ---
 @export var escena_sangre: PackedScene
@@ -68,6 +75,13 @@ var ultimo_punto_visto = null
 var marcador_interes: Node2D = null
 var golpes_puno = 0
 var timer_golpes_puno = 0.0
+var empuje_desde_x = null        # X del atacante cuerpo a cuerpo, para limitar el empuje
+var empuje_distancia_max = -1.0
+
+# --- COMPAÑEROS CAÍDOS ---
+var incidente = 0                # Sube cada vez que este guardia cae muerto o desmayado
+var cuerpos_vistos = {}          # instance_id del caído -> último incidente que ya descubrió
+var timer_cuerpos = 0.0
 
 # --- ATENCIÓN Y NAVEGACIÓN ---
 var punto_interes = null
@@ -143,6 +157,7 @@ func _physics_process(delta):
 
 	# Pausa de la IA si está procesando el knockup por daño
 	if esta_herido:
+		limitar_empuje(delta)
 		move_and_slide()
 		return
 
@@ -247,6 +262,7 @@ func procesar_vision(delta):
 	var lo_veia = viendo_jugador
 	viendo_jugador = false
 	procesar_vision_jugador(delta)
+	procesar_vision_cuerpos(delta)
 	if lo_veia and not viendo_jugador and ultimo_punto_visto != null and estado_actual in [Estado.AGRESIVO, Estado.SOSPECHANDO]:
 		perdio_de_vista()
 
@@ -354,6 +370,67 @@ func humo_bloquea(desde, hasta):
 		if cercano.distance_to(centro) < nube.radio:
 			return true
 	return false
+
+# --- COMPAÑEROS CAÍDOS ---
+# Si ve a otro guardia muerto o desmayado (uno que no había visto así), pasa a alerta y va
+# a revisar. Ver al jugador tiene prioridad: mientras lo ve no presta atención a los cuerpos.
+
+func esta_caido():
+	return estado_actual in [Estado.MUERTO, Estado.DESMAYADO] and visible and is_inside_tree()
+
+func procesar_vision_cuerpos(delta):
+	if viendo_jugador or esta_herido or nav_saltando or nav_en_escalera:
+		return
+	if estado_actual not in [Estado.PATRULLANDO, Estado.SOSPECHANDO, Estado.AGRESIVO, Estado.VOLVIENDO, Estado.ESPERANDO_MARCADOR]:
+		return
+	timer_cuerpos -= delta
+	if timer_cuerpos > 0.0:
+		return
+	timer_cuerpos = INTERVALO_REVISAR_CUERPOS
+	for otro in get_tree().get_nodes_in_group("enemigo"):
+		if otro == self or not otro.has_method("esta_caido") or not otro.esta_caido():
+			continue
+		var id = otro.get_instance_id()
+		if cuerpos_vistos.get(id, -1) == otro.incidente:
+			continue
+		if puede_ver_cuerpo(otro):
+			cuerpos_vistos[id] = otro.incidente
+			descubrir_cuerpo(otro.global_position)
+			return
+
+func puede_ver_cuerpo(otro):
+	# El cuerpo está tirado: se prueban varios puntos a lo largo, entre la cintura y el piso
+	for dx in [-30.0, 0.0, 30.0]:
+		for dy in [10.0, 25.0, 40.0, 55.0]:
+			var punto = otro.global_position + Vector2(dx, dy)
+			if punto_en_cono(punto) and linea_de_vision_libre(punto):
+				return true
+	return false
+
+func punto_en_cono(punto):
+	var local = to_local(punto)
+	local = Vector2(local.x * $ConoVision.scale.x, local.y) - cono_poligono.position
+	return Geometry2D.is_point_in_polygon(local, cono_poligono.polygon)
+
+func linea_de_vision_libre(punto):
+	ray_vision.target_position = to_local(punto)
+	ray_vision.force_raycast_update()
+	if ray_vision.is_colliding():
+		return false
+	return not follaje_bloquea(global_position, punto) and not humo_bloquea(global_position, punto)
+
+func descubrir_cuerpo(posicion):
+	if estado_actual == Estado.AGRESIVO:
+		# Ya estaba en alerta: sigue buscando, y si no tenía adónde ir, va al cuerpo
+		timer_alerta = TIEMPO_ALERTA
+		if punto_interes == null:
+			punto_interes = posicion
+			limpiar_ruta()
+		return
+	quitar_marcador()
+	punto_interes = posicion
+	mirar_hacia(posicion.x)
+	entrar_estado_alerta()
 
 func bajar_sospecha_gradual(delta):
 	if nivel_sospecha > 0 and estado_actual != Estado.AGRESIVO:
@@ -830,13 +907,13 @@ func recibir_dano(atacante_x = null, arma = "cuchillo", golpe_final = false):
 			golpes_puno = 0
 			caer_desmayado()
 		else:
-			aturdir(atacante_x, EMPUJE_PUNO)
+			aturdir(atacante_x, EMPUJE_PUNO, DISTANCIA_MAX_EMPUJE_MELEE)
 		return
 
 	if tiene_gorro:
 		# El casco absorbe la primera agresión y se cae
 		tiene_gorro = false
-		aturdir(atacante_x)
+		aturdir(atacante_x, EMPUJE_GOLPE, DISTANCIA_MAX_EMPUJE_MELEE)
 		return
 
 	vida -= 1
@@ -844,10 +921,12 @@ func recibir_dano(atacante_x = null, arma = "cuchillo", golpe_final = false):
 	if vida <= 0:
 		morir_general("danio_cae_al_suelo")
 	else:
-		aturdir(atacante_x)
+		aturdir(atacante_x, EMPUJE_GOLPE, DISTANCIA_MAX_EMPUJE_MELEE)
 
-func aturdir(atacante_x = null, empuje = EMPUJE_GOLPE):
+func aturdir(atacante_x = null, empuje = EMPUJE_GOLPE, distancia_max = -1.0):
 	esta_herido = true
+	empuje_desde_x = atacante_x
+	empuje_distancia_max = distancia_max
 	nivel_sospecha = 100.0
 	entrar_estado_alerta()
 
@@ -871,6 +950,15 @@ func aturdir(atacante_x = null, empuje = EMPUJE_GOLPE):
 
 	velocity.x = 0
 	esta_herido = false
+	empuje_distancia_max = -1.0
+
+func limitar_empuje(delta):
+	# El empuje de un golpe cuerpo a cuerpo lo aleja un poco, pero no fuera del alcance del jugador
+	if empuje_distancia_max < 0.0 or empuje_desde_x == null or velocity.x == 0.0:
+		return
+	var alejandose = sign(velocity.x) == sign(global_position.x - empuje_desde_x)
+	if alejandose and abs(global_position.x + velocity.x * delta - empuje_desde_x) > empuje_distancia_max:
+		velocity.x = 0.0
 
 func caer_desmayado():
 	quitar_marcador()

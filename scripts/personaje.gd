@@ -36,6 +36,12 @@ const FUERZA_MAX_ARCO = 1500.0
 const FUERZA_MAX_ARROJABLE = 950.0
 const ESCALA_TIEMPO_CARRUSEL = 0.2
 
+# --- GOLPE CUERPO A CUERPO ---
+# Zona de golpe: desde apenas detrás del cuerpo hasta el alcance del brazo, y en altura
+# desde arriba de la cabeza hasta los pies, para pegarle también a un guardia pegado o encima.
+const ZONA_GOLPE_DESDE = Vector2(-5, -100)
+const ZONA_GOLPE_HASTA = Vector2(70, 50)
+
 var nivel_ocultamiento = 0
 var gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
 
@@ -118,7 +124,6 @@ func _ready():
 	hitbox_shape.disabled = true
 	popup_acciones.hide()
 	anim.animation_finished.connect(_on_animation_finished)
-	hitbox.body_entered.connect(_on_hitbox_body_entered)
 
 	colision_parado.disabled = false
 	colision_sigilo.disabled = true
@@ -446,8 +451,8 @@ func manejar_combo_ataque():
 	if combo_paso == 0:
 		combo_paso = 1
 		ejecutar_accion_bloqueante("combo_" + arma_cuerpo_a_cuerpo + "_1")
-		hitbox_shape.disabled = false
 		sonido_ataque()
+		aplicar_golpe()
 	elif combo_paso == 1 and accion_bloqueante:
 		ataque_encolado = true
 	elif combo_paso == 2 and accion_bloqueante:
@@ -798,8 +803,8 @@ func _on_animation_finished():
 			ataque_encolado = false
 			combo_paso += 1
 			ejecutar_accion_bloqueante("combo_" + arma_cuerpo_a_cuerpo + "_" + str(combo_paso))
-			hitbox_shape.disabled = false
 			sonido_ataque()
+			aplicar_golpe()
 			return
 
 	if terminada == "mata_enemigo" or terminada == "desmaya_enemigo":
@@ -825,7 +830,22 @@ func _on_animation_finished():
 	ataque_encolado = false
 	combo_paso = 0
 
-func _on_hitbox_body_entered(body):
+func aplicar_golpe():
+	# Consulta directa en vez del área Hitbox: el área quedaba delante del cuerpo y no
+	# alcanzaba a los guardias pegados o encima, y entre golpes del combo no volvía a disparar.
+	var dir = -1.0 if facing_left else 1.0
+	var forma = RectangleShape2D.new()
+	forma.size = ZONA_GOLPE_HASTA - ZONA_GOLPE_DESDE
+	var centro = (ZONA_GOLPE_DESDE + ZONA_GOLPE_HASTA) * 0.5
+	var consulta = PhysicsShapeQueryParameters2D.new()
+	consulta.shape = forma
+	consulta.transform = Transform2D(0.0, global_position + Vector2(centro.x * dir, centro.y))
+	consulta.collision_mask = hitbox.collision_mask
+	consulta.exclude = [get_rid()]
+	for resultado in get_world_2d().direct_space_state.intersect_shape(consulta, 16):
+		golpear_cuerpo(resultado.collider)
+
+func golpear_cuerpo(body):
 	if body.is_in_group("enemigo") or body.is_in_group("cazadora"):
 		if body.has_method("recibir_dano"):
 			# El tercer golpe del combo de puño desmaya
