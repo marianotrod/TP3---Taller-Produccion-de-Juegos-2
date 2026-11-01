@@ -161,6 +161,8 @@ func _ready():
 	# --- 2 tiles: carrera por la pared y trepada ---
 	await parar_frente_a(paredes["2"])
 	var corrio = false
+	var se_colgo = false
+	var ruido_carrera = []
 	Input.action_press("mover_der")
 	await cuadros(2)
 	Input.action_press("saltar")
@@ -168,11 +170,17 @@ func _ready():
 		await cuadros(1)
 		if j.timer_wall_run > 0.0:
 			corrio = true
-		if not j.is_hanging and not j.accion_bloqueante and j.is_on_floor() and i > 20:
+			ruido_carrera.append_array(circulos())
+		if j.anim.animation == "trepa":
+			se_colgo = true
+		if se_colgo and not j.is_hanging and not j.accion_bloqueante and j.is_on_floor() and i > 20:
 			break
 	soltar_todo()
 	await cuadros(10)
 	check(corrio, "2 tiles: corre por la pared")
+	check(se_colgo, "2 tiles: se cuelga del borde y trepa (no lo pasa de largo)")
+	print("   ruido de la carrera: ", ruido_carrera)
+	check(not ruido_carrera.is_empty(), "la carrera por la pared hace un poco de ruido")
 	check(abs(j.global_position.y + 64 - (PISO_Y - 2 * TILE)) < 6, "2 tiles: llega arriba (y %.0f)" % j.global_position.y)
 
 	# --- 3 tiles: no llega ---
@@ -184,6 +192,24 @@ func _ready():
 	soltar_todo()
 	await cuadros(20)
 	check(j.global_position.y + 64 > PISO_Y - 10, "3 tiles: no llega (pies %.0f, piso %.0f)" % [j.global_position.y + 64, PISO_Y])
+
+	# --- Ramas finas: cayendo al lado, mirando hacia la rama, se cuelga (no queda parada en el aire) ---
+	bloque(X0 + 2600, PISO_Y - 400, 200, 32)
+	for caso in [["rama de prueba", Vector2(X0 + 2600 - 30, PISO_Y - 400 - 40)], ["rama del comienzo", Vector2(450, 268 - 40)]]:
+		soltar_todo()
+		j.is_hanging = false
+		j.accion_bloqueante = false
+		j.facing_left = false
+		j.velocity = Vector2.ZERO
+		j.global_position = caso[1]
+		await cuadros(60)
+		print("   %s: colgada %s, en piso %s, pos %s" % [caso[0], j.is_hanging, j.is_on_floor(), j.global_position])
+		check(j.is_hanging, caso[0] + ": queda colgada del borde")
+		# Vuelve al piso de prueba (soltarse de la rama real sería una caída mortal)
+		j.is_hanging = false
+		j.global_position = Vector2(X0 + 600, PISO_Y - 64)
+		j.velocity = Vector2.ZERO
+		await cuadros(20)
 
 	# --- Ruido de aterrizaje según la altura ---
 	var radios_por_altura = []

@@ -43,10 +43,12 @@ const RAPIDEZ_TREPADA_RAPIDA = 2.0   # Con saltar sube al doble de velocidad, pe
 const TIEMPO_SIN_AGARRE = 0.35       # Después de soltarse no se vuelve a agarrar enseguida
 
 # EXPERIMENTAL: carrera corta por la pared. Al saltar contra una pared y seguir empujando
-# hacia ella, sube un tramo más para alcanzar cornisas de hasta 2 tiles. Para desactivarla: false.
+# hacia ella, cerca de la cima del salto sube un tramo más. No mide la pared: con estos números
+# alcanza a colgarse de bordes de hasta ~2 tiles; si la pared es más alta, no llega y cae.
+# Para desactivarla: false.
 const WALL_RUN = true
-const VELOCIDAD_WALL_RUN = 420.0
-const DURACION_WALL_RUN = 0.25
+const VELOCIDAD_WALL_RUN = 350.0
+const DURACION_WALL_RUN = 0.2
 const VELOCIDAD_Y_INICIO_WALL_RUN = -250.0   # Arranca cerca de la cima del salto, no subiendo rápido
 
 # --- GOLPE MORTAL (feedback) ---
@@ -110,8 +112,10 @@ var estaba_en_suelo = true
 var punto_mas_alto_en_aire = 0.0
 
 var timer_sin_agarre = 0.0
+var posicion_tras_movimiento = Vector2.INF   # Para no usar choques viejos después de un teletransporte
 var wall_run_disponible = false   # Se habilita al saltar y se gasta al usarla o al aterrizar
 var timer_wall_run = 0.0
+var wall_run_ruidosa = false      # El ruido sale a mitad de la carrera (un roce corto contra un escalón no suena)
 
 var invulnerable = false          # Depuración (F3 en mundo.gd): los golpes se muestran pero no matan
 var ultimo_golpe_ms = -100000
@@ -181,6 +185,7 @@ func _physics_process(delta):
 
 	var velocidad_y_previa = velocity.y
 	move_and_slide()
+	posicion_tras_movimiento = global_position
 
 	if is_on_floor() and velocidad_y_previa > MAX_VELOCIDAD_CAIDA_SEGURA:
 		morir_por_caida()
@@ -277,7 +282,9 @@ func check_ledge_grab():
 	if not is_hanging and not floor_check.is_colliding() and not accion_bloqueante and timer_sin_agarre <= 0.0:
 		# Solo si el LedgeCollider quedó apoyado sobre un borde. Antes alcanzaba con estar quieta en el
 		# aire junto a una pared (la cima de cualquier salto) y se colgaba de una pared lisa.
-		if wall_check.is_colliding() and apoyada_en_cornisa() and velocity.y >= 0:
+		# No se pide WallCheck: en las ramas finas no las alcanza y se quedaba parada en el aire,
+		# sostenida por el LedgeCollider. Si ese sensor se apoya en algo, es un borde delante.
+		if apoyada_en_cornisa() and velocity.y >= 0:
 			is_hanging = true
 			timer_wall_run = 0.0
 			velocity = Vector2.ZERO
@@ -395,12 +402,17 @@ func procesar_wall_run(delta, direction):
 		timer_wall_run -= delta
 		if empuja_pared and not accion_bloqueante:
 			velocity.y = -VELOCIDAD_WALL_RUN
+			if not wall_run_ruidosa and timer_wall_run < DURACION_WALL_RUN * 0.5:
+				wall_run_ruidosa = true
+				Ruido.emitir(global_position + PIES, "wall_run", self)
+				Sonido.reproducir("paso", global_position, -4.0)
 		else:
 			timer_wall_run = 0.0
 		return
 	if wall_run_disponible and empuja_pared and not is_on_floor() and velocity.y > VELOCIDAD_Y_INICIO_WALL_RUN and velocity.y < 150.0 \
-			and not accion_bloqueante and not is_aiming and enemigo_agarrado == null and cornisa_fuera_de_alcance():
+			and not accion_bloqueante and not is_aiming and enemigo_agarrado == null:
 		wall_run_disponible = false
+		wall_run_ruidosa = false
 		timer_wall_run = DURACION_WALL_RUN
 		velocity.y = -VELOCIDAD_WALL_RUN
 
@@ -445,17 +457,6 @@ func procesar_ruido_movimiento(delta, velocidad_y_previa):
 	else:
 		timer_pasos = 0.0
 
-func cornisa_fuera_de_alcance():
-	# La carrera por la pared es solo para paredes más altas que el salto: si con lo que
-	# le queda de subida ya llega al borde, se agarra como siempre.
-	var subida_restante = max(0.0, -velocity.y) ** 2 / (2.0 * gravity_up)
-	var lado = -1.0 if facing_left else 1.0
-	var punto = global_position + Vector2(lado * 32.0, ledge_collider.position.y - subida_restante - 10.0)
-	var consulta = PhysicsPointQueryParameters2D.new()
-	consulta.position = punto
-	consulta.collision_mask = 1
-	return not get_world_2d().direct_space_state.intersect_point(consulta, 1).is_empty()
-
 func ruido_de_aterrizaje(altura):
 	# El círculo crece con la altura desde la que cayó: un tile (128 px) da uno chico
 	if altura < ALTURA_CAIDA_SILENCIOSA:
@@ -466,8 +467,12 @@ func ruido_de_aterrizaje(altura):
 
 func apoyada_en_cornisa():
 	# Al agarrarse de una cornisa queda "en el piso" sobre el LedgeCollider: eso no es aterrizar
+	# Solo si se apoya desde arriba: de costado contra una pared lisa no es un borde
+	if global_position != posicion_tras_movimiento:
+		return false   # La movieron (F2, pruebas): los choques del último movimiento ya no valen
 	for i in range(get_slide_collision_count()):
-		if get_slide_collision(i).get_local_shape() == ledge_collider:
+		var choque = get_slide_collision(i)
+		if choque.get_local_shape() == ledge_collider and choque.get_normal().y < -0.7:
 			return true
 	return false
 

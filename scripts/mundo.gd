@@ -4,6 +4,7 @@ extends Node2D
 # F1: círculos de ruido y conos de visión (en ruido.gd)
 # F2: lleva a la jugadora cerca del próximo tirador
 # F3: invulnerable (los golpes se muestran pero no matan)
+# Backspace: muestra/oculta las formas de colisión (como --debug-collisions)
 
 var indice_tirador = -1
 var aviso_depuracion: Label = null
@@ -52,6 +53,9 @@ func crear_cartel_pausa():
 func _unhandled_input(event):
 	if not OS.is_debug_build() or not (event is InputEventKey) or not event.pressed or event.is_echo():
 		return
+	if event.physical_keycode == KEY_BACKSPACE:
+		alternar_colisiones_visibles()
+		return
 	var jugador = get_tree().get_first_node_in_group("jugador")
 	if jugador == null or jugador.esta_muerto:
 		return
@@ -60,6 +64,20 @@ func _unhandled_input(event):
 	elif event.physical_keycode == KEY_F3:
 		jugador.invulnerable = not jugador.invulnerable
 		mostrar_aviso("INVULNERABLE (F3)" if jugador.invulnerable else "")
+
+func alternar_colisiones_visibles():
+	var visibles = not get_tree().debug_collisions_hint
+	get_tree().debug_collisions_hint = visibles
+	redibujar_colisiones(get_tree().root, visibles)
+
+func redibujar_colisiones(nodo, visibles):
+	# Las formas se dibujan solo al redibujar; los tiles tienen su propio modo de visibilidad
+	if nodo is TileMapLayer:
+		nodo.collision_visibility_mode = TileMapLayer.DEBUG_VISIBILITY_MODE_FORCE_SHOW if visibles else TileMapLayer.DEBUG_VISIBILITY_MODE_FORCE_HIDE
+	elif nodo is CanvasItem:
+		nodo.queue_redraw()
+	for hijo in nodo.get_children():
+		redibujar_colisiones(hijo, visibles)
 
 func ir_al_proximo_tirador(jugador):
 	var tiradores = get_tree().get_nodes_in_group("tirador")
