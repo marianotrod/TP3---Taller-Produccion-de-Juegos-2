@@ -16,8 +16,9 @@ const MAX_VELOCIDAD_CAIDA_SEGURA = 1400.0
 # --- RUIDO ---
 const INTERVALO_PASOS_COMBATE = 0.32
 const INTERVALO_PASOS_SIGILO = 0.5
-const VELOCIDAD_ATERRIZAJE_RUIDOSO = 450.0
-const VELOCIDAD_CAIDA_FUERTE = 1100.0
+const ALTURA_CAIDA_SILENCIOSA = 48.0   # Caídas más cortas (escalones, agarrarse de una cornisa) no hacen ruido
+const RADIO_MAX_ATERRIZAJE = 520.0     # El radio del ruido crece con la altura caída hasta este tope
+const ALTURA_CAIDA_FUERTE = 400.0      # Desde esta altura suena más fuerte
 const PIES = Vector2(0, 64)
 const MARGEN_VACIO = 60.0   # Píxeles debajo del límite inferior de la cámara antes de morir
 
@@ -32,6 +33,21 @@ const CARGA_POR_SEGUNDO = 1200.0
 # desde arriba de la cabeza hasta los pies, para pegarle también a un guardia pegado o encima.
 const ZONA_GOLPE_DESDE = Vector2(-5, -100)
 const ZONA_GOLPE_HASTA = Vector2(70, 50)
+# Zona del golpe que cuenta como pegarle a una pared (no incluye el piso)
+const ZONA_PARED_DESDE = Vector2(30, -60)
+const ZONA_PARED_HASTA = Vector2(70, 30)
+
+# --- CORNISAS ---
+const VELOCIDAD_TREPAR_CORNISA = 120.0
+const RAPIDEZ_TREPADA_RAPIDA = 2.0   # Con saltar sube al doble de velocidad, pero hace ruido
+const TIEMPO_SIN_AGARRE = 0.35       # Después de soltarse no se vuelve a agarrar enseguida
+
+# EXPERIMENTAL: carrera corta por la pared. Al saltar contra una pared y seguir empujando
+# hacia ella, sube un tramo más para alcanzar cornisas de hasta 2 tiles. Para desactivarla: false.
+const WALL_RUN = true
+const VELOCIDAD_WALL_RUN = 420.0
+const DURACION_WALL_RUN = 0.25
+const VELOCIDAD_Y_INICIO_WALL_RUN = -250.0   # Arranca cerca de la cima del salto, no subiendo rápido
 
 # --- GOLPE MORTAL (feedback) ---
 const PAUSA_IMPACTO = 0.15        # Segundos reales en que el juego casi se congela al recibir el golpe
@@ -91,6 +107,11 @@ var ataque_encolado = false
 
 var timer_pasos = 0.0
 var estaba_en_suelo = true
+var punto_mas_alto_en_aire = 0.0
+
+var timer_sin_agarre = 0.0
+var wall_run_disponible = false   # Se habilita al saltar y se gasta al usarla o al aterrizar
+var timer_wall_run = 0.0
 
 var invulnerable = false          # Depuración (F3 en mundo.gd): los golpes se muestran pero no matan
 var ultimo_golpe_ms = -100000
@@ -136,7 +157,7 @@ func _physics_process(delta):
 		mover_en_escalera()
 		return
 
-	actualizar_agarre_de_cornisa()
+	actualizar_agarre_de_cornisa(delta)
 	var direction = Input.get_axis("mover_izq", "mover_der")
 
 	procesar_cambio_de_postura()
@@ -244,36 +265,54 @@ func salir_zona_escalera():
 
 # --- CORNISAS ---
 
-func actualizar_agarre_de_cornisa():
+func actualizar_agarre_de_cornisa(delta):
+	timer_sin_agarre -= delta
 	var should_disable_ledge = false
 	if not is_hanging:
-		should_disable_ledge = floor_check.is_colliding() or velocity.y < 0 or top_check.is_colliding()
+		should_disable_ledge = floor_check.is_colliding() or velocity.y < 0 or top_check.is_colliding() or timer_sin_agarre > 0.0
 	ledge_collider.disabled = should_disable_ledge
 	check_ledge_grab()
 
 func check_ledge_grab():
-	if not is_hanging and not floor_check.is_colliding() and not accion_bloqueante:
-		if wall_check.is_colliding() and (is_on_floor() or abs(velocity.y) < 10.0) and velocity.y >= 0:
+	if not is_hanging and not floor_check.is_colliding() and not accion_bloqueante and timer_sin_agarre <= 0.0:
+		# Solo si el LedgeCollider quedó apoyado sobre un borde. Antes alcanzaba con estar quieta en el
+		# aire junto a una pared (la cima de cualquier salto) y se colgaba de una pared lisa.
+		if wall_check.is_colliding() and apoyada_en_cornisa() and velocity.y >= 0:
 			is_hanging = true
+			timer_wall_run = 0.0
 			velocity = Vector2.ZERO
 
 func procesar_colgada():
+	# Arriba o hacia la pared: trepa en silencio. Saltar: trepa rápido, con ruido.
+	# B (cambiar postura) o abajo: se suelta. Hacia atrás no hace nada.
 	velocity = Vector2.ZERO
-	var trepar_hacia_pared = (not facing_left and Input.is_action_just_pressed("mover_der")) or (facing_left and Input.is_action_just_pressed("mover_izq"))
-	var soltarse_hacia_atras = (not facing_left and Input.is_action_just_pressed("mover_izq")) or (facing_left and Input.is_action_just_pressed("mover_der"))
+	var hacia_pared = Input.is_action_pressed("mover_izq" if facing_left else "mover_der")
+	if Input.is_action_just_pressed("saltar"):
+		trepar_cornisa(true)
+	elif Input.is_action_pressed("arriba") or hacia_pared:
+		trepar_cornisa(false)
+	elif Input.is_action_just_pressed("cambiar_postura") or Input.is_action_just_pressed("abajo"):
+		soltar_cornisa()
 
-	if Input.is_action_just_pressed("arriba") or trepar_hacia_pared:
-		is_hanging = false
-		ejecutar_accion_bloqueante("trepa")
-	elif Input.is_action_just_pressed("abajo") or soltarse_hacia_atras:
-		is_hanging = false
-		position.y += 2
+func trepar_cornisa(rapido):
+	is_hanging = false
+	ejecutar_accion_bloqueante("trepa")
+	if rapido:
+		anim.speed_scale = RAPIDEZ_TREPADA_RAPIDA
+		Ruido.emitir(global_position + PIES, "trepada_rapida", self)
+		Sonido.reproducir("paso", global_position, -2.0)
+
+func soltar_cornisa():
+	is_hanging = false
+	timer_sin_agarre = TIEMPO_SIN_AGARRE
+	ledge_collider.disabled = true
+	position.y += 2
 
 # --- POSTURA ---
 
 func procesar_cambio_de_postura():
-	if not Input.is_action_just_pressed("cambiar_postura") or accion_bloqueante:
-		return
+	if not Input.is_action_just_pressed("cambiar_postura") or accion_bloqueante or is_hanging:
+		return   # Colgada, B la suelta de la cornisa (procesar_colgada)
 	if enemigo_agarrado != null:
 		enemigo_agarrado.ser_desmayado()
 		popup_acciones.hide()
@@ -324,7 +363,7 @@ func procesar_movimiento(delta, direction):
 		current_speed = 0.0
 		velocity.x = 0
 		if esta_trepando:
-			velocity.y = -120
+			velocity.y = -VELOCIDAD_TREPAR_CORNISA * anim.speed_scale
 	elif enemigo_agarrado != null:
 		current_speed = SPEED_ARRASTRAR_REHEN
 	elif esta_acostado:
@@ -342,9 +381,28 @@ func procesar_movimiento(delta, direction):
 	elif Input.is_action_just_pressed("saltar") and puede_saltar():
 		velocity.y = JUMP_VELOCITY
 		es_sigilo = false
+		wall_run_disponible = true
 
-	if Input.is_action_just_released("saltar") and velocity.y < 0:
+	if Input.is_action_just_released("saltar") and velocity.y < 0 and timer_wall_run <= 0.0:
 		velocity.y *= 0.5
+
+	if WALL_RUN:
+		procesar_wall_run(delta, direction)
+
+func procesar_wall_run(delta, direction):
+	var empuja_pared = is_on_wall() and direction != 0 and sign(direction) == -sign(get_wall_normal().x)
+	if timer_wall_run > 0.0:
+		timer_wall_run -= delta
+		if empuja_pared and not accion_bloqueante:
+			velocity.y = -VELOCIDAD_WALL_RUN
+		else:
+			timer_wall_run = 0.0
+		return
+	if wall_run_disponible and empuja_pared and not is_on_floor() and velocity.y > VELOCIDAD_Y_INICIO_WALL_RUN and velocity.y < 150.0 \
+			and not accion_bloqueante and not is_aiming and enemigo_agarrado == null and cornisa_fuera_de_alcance():
+		wall_run_disponible = false
+		timer_wall_run = DURACION_WALL_RUN
+		velocity.y = -VELOCIDAD_WALL_RUN
 
 func puede_saltar():
 	return is_on_floor() and not accion_bloqueante and not esta_acostado and not (es_sigilo and top_check.is_colliding()) and not en_zona_interactiva
@@ -363,13 +421,14 @@ func orientar_puntos_de_accion():
 
 func procesar_ruido_movimiento(delta, velocidad_y_previa):
 	var en_suelo = is_on_floor()
-	if en_suelo and not estaba_en_suelo and not esta_muerto:
-		if velocidad_y_previa > VELOCIDAD_CAIDA_FUERTE:
-			Ruido.emitir(global_position + PIES, "caida_fuerte", self)
-			Sonido.reproducir("aterrizaje", global_position, 3.0)
-		elif velocidad_y_previa > VELOCIDAD_ATERRIZAJE_RUIDOSO:
-			Ruido.emitir(global_position + PIES, "aterrizaje", self)
-			Sonido.reproducir("aterrizaje", global_position)
+	if not en_suelo:
+		if estaba_en_suelo:
+			punto_mas_alto_en_aire = global_position.y
+		punto_mas_alto_en_aire = min(punto_mas_alto_en_aire, global_position.y)
+	elif not estaba_en_suelo and not esta_muerto:
+		wall_run_disponible = false
+		if not apoyada_en_cornisa():
+			ruido_de_aterrizaje(global_position.y - punto_mas_alto_en_aire)
 	estaba_en_suelo = en_suelo
 
 	# Pasos: en combate hacen ruido; en sigilo, arrastrándose o con rehén son silenciosos
@@ -385,6 +444,32 @@ func procesar_ruido_movimiento(delta, velocidad_y_previa):
 				timer_pasos = INTERVALO_PASOS_COMBATE
 	else:
 		timer_pasos = 0.0
+
+func cornisa_fuera_de_alcance():
+	# La carrera por la pared es solo para paredes más altas que el salto: si con lo que
+	# le queda de subida ya llega al borde, se agarra como siempre.
+	var subida_restante = max(0.0, -velocity.y) ** 2 / (2.0 * gravity_up)
+	var lado = -1.0 if facing_left else 1.0
+	var punto = global_position + Vector2(lado * 32.0, ledge_collider.position.y - subida_restante - 10.0)
+	var consulta = PhysicsPointQueryParameters2D.new()
+	consulta.position = punto
+	consulta.collision_mask = 1
+	return not get_world_2d().direct_space_state.intersect_point(consulta, 1).is_empty()
+
+func ruido_de_aterrizaje(altura):
+	# El círculo crece con la altura desde la que cayó: un tile (128 px) da uno chico
+	if altura < ALTURA_CAIDA_SILENCIOSA:
+		return
+	var radio = min(altura + 30.0, RADIO_MAX_ATERRIZAJE)
+	Ruido.emitir(global_position + PIES, radio, self)
+	Sonido.reproducir("aterrizaje", global_position, 3.0 if altura >= ALTURA_CAIDA_FUERTE else lerp(-10.0, 0.0, altura / ALTURA_CAIDA_FUERTE))
+
+func apoyada_en_cornisa():
+	# Al agarrarse de una cornisa queda "en el piso" sobre el LedgeCollider: eso no es aterrizar
+	for i in range(get_slide_collision_count()):
+		if get_slide_collision(i).get_local_shape() == ledge_collider:
+			return true
+	return false
 
 func esta_en_humo():
 	for nube in get_tree().get_nodes_in_group("humo"):
@@ -469,23 +554,36 @@ func iniciar_golpe(paso):
 	aplicar_golpe()
 
 func sonido_ataque():
-	Ruido.emitir(global_position, "ataque", self)
+	# Golpe al aire: lo oye la jugadora, no los guardias (el ruido sale solo si pega en algo)
 	Sonido.reproducir("golpe_aire", global_position, -4.0)
 
 func aplicar_golpe():
 	# Consulta directa en vez del área Hitbox: el área quedaba delante del cuerpo y no
 	# alcanzaba a los guardias pegados o encima, y entre golpes del combo no volvía a disparar.
+	var golpeados = consultar_zona(ZONA_GOLPE_DESDE, ZONA_GOLPE_HASTA, hitbox.collision_mask)
+	for cuerpo in golpeados:
+		golpear_cuerpo(cuerpo)
+	if not golpeados.is_empty():
+		Ruido.emitir(global_position, "ataque", self)
+	elif not consultar_zona(ZONA_PARED_DESDE, ZONA_PARED_HASTA, 1).is_empty():
+		Ruido.emitir(global_position, "golpe_pared", self)
+		Sonido.reproducir("piedra", global_position, -4.0)
+
+func consultar_zona(desde, hasta, mascara):
+	# Cuerpos dentro de un rectángulo delante de la jugadora (desde/hasta mirando a la derecha)
 	var dir = -1.0 if facing_left else 1.0
 	var forma = RectangleShape2D.new()
-	forma.size = ZONA_GOLPE_HASTA - ZONA_GOLPE_DESDE
-	var centro = (ZONA_GOLPE_DESDE + ZONA_GOLPE_HASTA) * 0.5
+	forma.size = hasta - desde
+	var centro = (desde + hasta) * 0.5
 	var consulta = PhysicsShapeQueryParameters2D.new()
 	consulta.shape = forma
 	consulta.transform = Transform2D(0.0, global_position + Vector2(centro.x * dir, centro.y))
-	consulta.collision_mask = hitbox.collision_mask
+	consulta.collision_mask = mascara
 	consulta.exclude = [get_rid()]
+	var cuerpos = []
 	for resultado in get_world_2d().direct_space_state.intersect_shape(consulta, 16):
-		golpear_cuerpo(resultado.collider)
+		cuerpos.append(resultado.collider)
+	return cuerpos
 
 func golpear_cuerpo(body):
 	if body.is_in_group("enemigo") or body.is_in_group("cazadora"):
@@ -499,6 +597,10 @@ func golpear_cuerpo(body):
 
 func ejecutar_accion_bloqueante(nombre_animacion):
 	accion_bloqueante = true
+	anim.speed_scale = 1.0
+	# Una acción tiene que terminar para liberar a la jugadora: si la animación quedó en loop
+	# en las sprite sheets (pasaba con "desmaya_enemigo"), se quedaba trabada para siempre.
+	anim.sprite_frames.set_animation_loop(nombre_animacion, false)
 	anim.play(nombre_animacion)
 
 # --- APUNTAR Y ARROJAR ---
@@ -609,6 +711,7 @@ func update_animation(direction):
 
 	if accion_bloqueante or trepando_escalera:
 		return
+	anim.speed_scale = 1.0
 
 	if is_hanging:
 		anim.offset.y = 5
@@ -623,6 +726,9 @@ func update_animation(direction):
 		if direction == 0:
 			anim.pause()
 			anim.frame = 0
+	elif timer_wall_run > 0.0:
+		anim.play("camina_combate")   # Corre por la pared
+		anim.speed_scale = 1.5
 	elif not is_on_floor():
 		if velocity.y < 0:
 			anim.play("salta_hacia_arriba")
@@ -656,6 +762,8 @@ func _on_animation_finished():
 	if terminada == "trepa":
 		var direccion = -1 if anim.flip_h else 1
 		global_position += Vector2(25 * direccion, 12)
+		velocity = Vector2.ZERO   # Sin esto conservaba la subida de la trepada y saltaba un poco al llegar
+		anim.speed_scale = 1.0
 		anim.offset.x = compensacion_sprite if facing_left else 0.0
 		anim.offset.y = 0
 		accion_bloqueante = false
@@ -758,6 +866,7 @@ func _morir(razon, animaciones, en_vacio = false, ruido_de_caida = false, empuje
 		return
 	esta_muerto = true
 	accion_bloqueante = true
+	anim.speed_scale = 1.0
 	velocity = empuje
 	inventario.cerrar_carrusel_sin_elegir()
 	if ruido_de_caida:

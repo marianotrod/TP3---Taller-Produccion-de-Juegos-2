@@ -9,7 +9,9 @@ const RADIO = {
 	"paso_combate": 260.0,
 	"aterrizaje": 300.0,
 	"caida_fuerte": 500.0,
-	"ataque": 380.0,
+	"ataque": 380.0,          # Solo si el golpe pega en un guardia
+	"golpe_pared": 250.0,
+	"trepada_rapida": 220.0,
 	"matar_rehen": 420.0,
 	"arrojar_rehen": 350.0,
 	"atraer": 520.0,

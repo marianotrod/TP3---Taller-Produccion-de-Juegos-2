@@ -4,6 +4,8 @@ extends "res://scripts/enemigo.gd"
 # Patrulla, oye y busca igual que el enemigo melee. En alerta, si ve al jugador
 # dentro del alcance, se detiene, apunta (con aviso visible) y dispara directo hacia él,
 # en cualquier ángulo. Entre disparos tiene un tiempo de recarga.
+# Si la pierde de vista mientras apunta, sigue apuntando un rato (MEMORIA_PUNTERIA)
+# en vez de volver a empezar: correr de un lado a otro ya no alcanza para esquivarlo.
 
 const ESCENA_BALA = preload("res://scripts/bala.gd")
 
@@ -11,11 +13,13 @@ const ESCENA_BALA = preload("res://scripts/bala.gd")
 @export var tiempo_apuntado = 1.0     # Demora antes de disparar
 @export var tiempo_recarga = 2.5      # Cooldown entre disparos
 const FRACCION_SEGUIMIENTO = 0.6      # Durante este tramo del apuntado sigue al jugador; después fija la dirección
+const MEMORIA_PUNTERIA = 1.2          # Segundos que sigue apuntando después de perderla de vista
 
 var timer_apuntado = -1.0
 var timer_recarga = 0.0
 var direccion_disparo = Vector2.RIGHT
 var fogonazo = 0.0
+var tiempo_sin_ver = 0.0
 
 func _ready():
 	super()
@@ -24,11 +28,13 @@ func _ready():
 func _physics_process(delta):
 	timer_recarga -= delta
 	fogonazo = max(0.0, fogonazo - delta)
+	tiempo_sin_ver = 0.0 if viendo_jugador else tiempo_sin_ver + delta
 	super(delta)
 
 func comportamiento_agresivo(delta):
 	var jugador = obtener_jugador()
-	if jugador and viendo_jugador and is_on_floor() and global_position.distance_to(jugador.global_position) <= alcance_disparo:
+	var sigue_apuntando = timer_apuntado >= 0.0 and tiempo_sin_ver < MEMORIA_PUNTERIA
+	if jugador and not jugador.esta_muerto and (viendo_jugador or sigue_apuntando) and is_on_floor() and global_position.distance_to(jugador.global_position) <= alcance_disparo:
 		velocity.x = 0
 		limpiar_ruta()
 		mirar_hacia(jugador.global_position.x)

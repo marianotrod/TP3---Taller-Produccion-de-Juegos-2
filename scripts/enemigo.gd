@@ -72,6 +72,7 @@ var tiempo_desmayado = 0.0
 
 var vida = VIDA_MAX
 var esta_herido = false          # Aturdido por un golpe: la IA se pausa hasta que vence timer_aturdido
+var sostenido = false            # En brazos de la jugadora (agarrado, o desmayado/muerto antes de soltarlo): sin física propia
 var timer_aturdido = 0.0
 var al_terminar_animacion = Callable()   # Paso siguiente de una secuencia de animaciones
 var compensacion_sprite = 0.0
@@ -135,7 +136,7 @@ func _physics_process(delta):
 		return
 	procesar_vision(delta)
 
-	if estado_actual == Estado.AGARRADO:
+	if estado_actual == Estado.AGARRADO or sostenido:
 		return
 
 	# Gravedad proporcional (anulada si está trepando o en escalera)
@@ -1056,6 +1057,7 @@ func ser_agarrado():
 	guardar_puesto()
 	ancho_normal()
 	estado_actual = Estado.AGARRADO
+	sostenido = true
 	cambiar_icono_estado("")
 	$CollisionShape2D.set_deferred("disabled", true)
 	velocity = Vector2.ZERO
@@ -1078,6 +1080,8 @@ func ser_asesinado():
 	reproducir_animacion("agarrado_matar")
 
 func soltar_cuerpo(es_muerte):
+	sostenido = false
+	velocity = Vector2.ZERO
 	set_physics_process(true)
 	$CollisionShape2D.set_deferred("disabled", false)
 	set_collision_mask_value(1, true)

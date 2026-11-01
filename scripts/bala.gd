@@ -3,8 +3,8 @@ extends Node2D
 # Bala del enemigo con arcabuz. Viaja en línea recta, choca con el mundo (capa 1)
 # y con el jugador (capa 2). No toca la capa 4, así que no puede cortar la soga del puente.
 
-const VELOCIDAD = 1100.0
-const VIDA = 2.5
+const VELOCIDAD = 4500.0   # Casi instantánea: se esquiva antes del disparo, no después
+const VIDA = 0.6
 const MASCARA = 1 | 2
 
 var direccion = Vector2.RIGHT
@@ -34,7 +34,10 @@ func _physics_process(delta):
 		queue_free()
 		return
 	position += avance
+	queue_redraw()
 
 func _draw():
-	draw_line(Vector2(-22, 0), Vector2(0, 0), Color(1.0, 0.85, 0.4, 0.5), 3.0)
+	# Estela larga: a esta velocidad avanza ~75 px por cuadro
+	var largo = min(90.0, tiempo * VELOCIDAD)
+	draw_line(Vector2(-largo, 0), Vector2(0, 0), Color(1.0, 0.85, 0.4, 0.6), 3.0)
 	draw_circle(Vector2.ZERO, 4.0, Color(1.0, 0.95, 0.7))

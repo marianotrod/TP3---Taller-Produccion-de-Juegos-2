@@ -72,6 +72,13 @@ func armar_guion():
 	tocar(220, "cambiar_postura")             # vuelve a combate
 	mantener(230, 270, "abajo")               # acostada
 	mantener(240, 265, "mover_izq")
+	# Antes de caer de la rama la pone donde estaba en las grabaciones viejas: ahí se "colgaba"
+	# parada contra una rama (bug corregido) y el resto del guion depende de esa posición.
+	en(279, func():
+		j.global_position = Vector2(421.2, 333.2)
+		j.velocity = Vector2(0, 770)
+		j.is_hanging = false
+		j.accion_bloqueante = false)
 	mantener(280, 340, "mover_izq")           # cae de la rama
 	# --- Rehén: agarrar por la espalda, caminar y matar ---
 	en(400, func():

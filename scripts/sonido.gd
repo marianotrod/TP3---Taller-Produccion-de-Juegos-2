@@ -7,6 +7,7 @@ extends Node
 
 const CARPETA = "res://assets/sonidos/"
 var cache = {}
+var azar = RandomNumberGenerator.new()   # Propio: los sonidos no tienen que alterar el azar de la IA
 
 func _variantes(nombre):
 	if cache.has(nombre):
@@ -36,9 +37,9 @@ func reproducir(nombre, posicion = null, volumen_db = 0.0):
 		reproductor = AudioStreamPlayer2D.new()
 		reproductor.max_distance = 2200.0
 		reproductor.attenuation = 1.5
-	reproductor.stream = variantes.pick_random()
+	reproductor.stream = variantes[azar.randi_range(0, variantes.size() - 1)]
 	reproductor.volume_db = volumen_db
-	reproductor.pitch_scale = randf_range(0.94, 1.06)
+	reproductor.pitch_scale = azar.randf_range(0.94, 1.06)
 	reproductor.process_mode = Node.PROCESS_MODE_ALWAYS
 	reproductor.finished.connect(reproductor.queue_free)
 	escena.add_child(reproductor)
