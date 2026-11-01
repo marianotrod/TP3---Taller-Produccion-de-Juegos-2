@@ -25,27 +25,27 @@ func _ready():
 	var E = enemigo("enemigo6").Estado
 
 	# Munición
-	check(j.municion["arco_letal"] == 5 and j.municion["arco_desmayante"] == 5, "arranca con 5 flechas de cada tipo")
-	j.recoger_flechas("letal", 5)
-	check(j.municion["arco_letal"] == 10, "carcaj suma 5 flechas letales")
-	j.equipar_arma("arco_desmayante")
-	check(j.tipo_flecha == "desmayante", "equipar arco desmayante cambia el tipo de flecha")
+	check(j.inventario.municion["arco_letal"] == 5 and j.inventario.municion["arco_desmayante"] == 5, "arranca con 5 flechas de cada tipo")
+	j.inventario.recoger_flechas("letal", 5)
+	check(j.inventario.municion["arco_letal"] == 10, "carcaj suma 5 flechas letales")
+	j.inventario.equipar_arma("arco_desmayante")
+	check(j.inventario.tipo_flecha() == "desmayante", "equipar arco desmayante cambia el tipo de flecha")
 	j.fuerza_arco = 600
 	j.usar_arma()
-	check(j.municion["arco_desmayante"] == 4, "disparar gasta una flecha desmayante")
-	j.municion["arco_desmayante"] = 0
+	check(j.inventario.municion["arco_desmayante"] == 4, "disparar gasta una flecha desmayante")
+	j.inventario.municion["arco_desmayante"] = 0
 	j.usar_arma()
-	check(j.municion["arco_desmayante"] == 0, "sin flechas no dispara")
-	j.equipar_arma("distraccion")
+	check(j.inventario.municion["arco_desmayante"] == 0, "sin flechas no dispara")
+	j.inventario.equipar_arma("distraccion")
 	j.usar_arma()
 	j.usar_arma()
 	await get_tree().process_frame
 	var piedras = get_tree().current_scene.get_children().filter(func(n): return n.get_script() == preload("res://scripts/arrojable.gd"))
 	check(piedras.size() == 1, "piedra tiene cooldown (2 pedidos seguidos = 1 piedra)")
-	j.alternar_ultimo("cambiar_arma")
-	check(j.arma_actual == "arco_desmayante", "toque en LB alterna con la última arma")
-	j.equipar_objeto("cuchillo")
-	check(j.arma_cuerpo_a_cuerpo == "cuchillo", "equipar cuchillo")
+	j.inventario.alternar_ultimo("cambiar_arma")
+	check(j.inventario.arma_actual == "arco_desmayante", "toque en LB alterna con la última arma")
+	j.inventario.equipar_objeto("cuchillo")
+	check(j.inventario.objeto_actual == "cuchillo", "equipar cuchillo")
 
 	# Casco y flechas
 	var con_casco = enemigo("enemigo2")

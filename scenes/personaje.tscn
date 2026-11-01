@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://ngccxay0kbuf" path="res://assets/efectos/ICONOS_EFECTOS.png" id="6_4w6sy"]
 [ext_resource type="Texture2D" uid="uid://b2iu332v6d4gl" path="res://assets/flecha/puntos.png" id="7_4h8dm"]
 [ext_resource type="FontFile" uid="uid://beo32a2h43lqy" path="res://fonts/Minecraft.ttf" id="9_4w6sy"]
+[ext_resource type="Script" path="res://scripts/inventario.gd" id="10_inventario"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_4h8dm"]
 atlas = ExtResource("3_4h8dm")
@@ -1457,3 +1458,6 @@ vertical_alignment = 1
 
 [node name="PuntoDisparo" type="Marker2D" parent="." unique_id=1805242074]
 position = Vector2(40, 29)
+
+[node name="Inventario" type="Node" parent="." unique_id=1714000001]
+script = ExtResource("10_inventario")

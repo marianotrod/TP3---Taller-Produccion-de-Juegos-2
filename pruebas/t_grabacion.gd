@@ -104,15 +104,15 @@ func armar_guion():
 	mantener(710, 780, "apuntar")
 	mantener(720, 790, "disparar")            # suelta apuntar antes: cancela
 	# --- Piedra y humo ---
-	en(800, func(): j.equipar_arma("distraccion"))
+	en(800, func(): j.inventario.equipar_arma("distraccion"))
 	mantener(805, 850, "apuntar")
 	mantener(810, 840, "disparar")
-	en(860, func(): j.equipar_arma("humo"))
+	en(860, func(): j.inventario.equipar_arma("humo"))
 	mantener(865, 910, "apuntar")
 	mantener(870, 900, "disparar")
 	# --- Golpes de cuchillo por la espalda ---
 	en(950, func():
-		j.equipar_objeto("cuchillo")
+		j.inventario.equipar_objeto("cuchillo")
 		var e = enemigo("enemigo8")
 		j.global_position = e.global_position - Vector2(40 * e.direccion_x, 0)
 		j.is_hanging = false
@@ -178,7 +178,7 @@ func registrar():
 		cuadro, f2(j.global_position), f2(j.velocity), j.anim.animation, j.anim.frame,
 		j.es_sigilo, j.esta_acostado, j.is_hanging, j.accion_bloqueante, j.is_aiming,
 		j.trepando_escalera, j.esta_muerto, j.enemigo_agarrado != null,
-		j.arma_actual, j.objeto_actual, j.municion, j.visible])
+		j.inventario.arma_actual, j.inventario.objeto_actual, j.inventario.municion, j.visible])
 	if cuadro % 10 != 0:
 		return
 	for e in get_tree().get_nodes_in_group("enemigo"):

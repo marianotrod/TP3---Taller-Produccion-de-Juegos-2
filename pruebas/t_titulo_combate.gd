@@ -68,7 +68,7 @@ func _ready():
 	var base = g.global_position
 	g.set_physics_process(false)
 	j.facing_left = false
-	j.arma_cuerpo_a_cuerpo = "puño"
+	j.inventario.equipar_objeto("puño")
 	for caso in [["pegado delante", Vector2(12, 0)], ["un poco detrás", Vector2(-15, 0)], ["encima", Vector2(0, -95)], ["al alcance", Vector2(85, 0)]]:
 		g.golpes_puno = 0
 		g.tiene_gorro = false
@@ -94,7 +94,7 @@ func _ready():
 	j.facing_left = true
 	g.tiene_gorro = true
 	await esperar(0.3)
-	j.arma_cuerpo_a_cuerpo = "cuchillo"
+	j.inventario.equipar_objeto("cuchillo")
 	j.combo_paso = 1
 	j.aplicar_golpe()
 	var max_dist = 0.0

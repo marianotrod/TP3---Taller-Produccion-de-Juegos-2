@@ -35,14 +35,14 @@ func _ready():
 	j.global_position = Vector2(10500, 900)
 	for i in range(20):
 		await get_tree().physics_frame
-	j.equipar_arma("humo")
+	j.inventario.equipar_arma("humo")
 	j.direccion_tiro = Vector2(1, -0.5).normalized()
 	j.fuerza_arco = 700
 	j.usar_arma()
 	Ruido.emitir(j.global_position + Vector2(0, 64), "atraer", j)
 	await get_tree().create_timer(0.45).timeout
 	await captura("humo_ruido")
-	j.abrir_carrusel("cambiar_arma")
+	j.inventario.abrir_carrusel("cambiar_arma")
 	await get_tree().create_timer(0.1).timeout
 	await captura("carrusel")
 	get_tree().quit()
