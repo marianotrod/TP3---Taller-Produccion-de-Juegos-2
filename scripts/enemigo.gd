@@ -34,6 +34,7 @@ const TIEMPO_ALERTA = 10.0       # Cuánto busca después de perder de vista al 
 const TIEMPO_DESMAYO = 10.0
 const TIEMPO_SOLTADO = 2.5       # Cuánto tarda en reaccionar un rehén soltado/arrojado
 const TIEMPO_REGENERAR = 10.0    # Sin recibir daño, recupera toda la vida
+const TIEMPO_ATURDIDO = 0.5      # Cuánto queda aturdido por un golpe; un golpe nuevo lo reinicia
 const VIDA_MAX = 3
 const PIES = 64.0                # Distancia del origen a los pies (para la navegación)
 const LIMITE_CAIDA = 1500.0      # Más abajo de esto cayó del mapa
@@ -70,7 +71,9 @@ var tiempo_sospecha = 0.0
 var tiempo_desmayado = 0.0
 
 var vida = VIDA_MAX
-var esta_herido = false
+var esta_herido = false          # Aturdido por un golpe: la IA se pausa hasta que vence timer_aturdido
+var timer_aturdido = 0.0
+var al_terminar_animacion = Callable()   # Paso siguiente de una secuencia de animaciones
 var compensacion_sprite = 0.0
 
 # --- SISTEMA DE DETECCIÓN VISUAL ---
@@ -167,6 +170,9 @@ func _physics_process(delta):
 	if esta_herido:
 		limitar_empuje(delta)
 		move_and_slide()
+		timer_aturdido -= delta
+		if timer_aturdido <= 0.0:
+			terminar_aturdimiento()
 		return
 
 	# Un ruido escuchado en el aire se procesa al volver a patrullar
@@ -893,6 +899,17 @@ func actualizar_animaciones():
 		Estado.EN_ESCALERA:
 			reproducir_animacion("trepa_escalera")
 
+# --- SECUENCIAS DE ANIMACIÓN ---
+# Cada paso dice qué hacer cuando termina su animación. Una secuencia nueva reemplaza a la
+# anterior (con await quedaban esperas sueltas que se pisaban entre sí).
+
+func encadenar(nombre_animacion, siguiente: Callable = Callable()):
+	reproducir_animacion(nombre_animacion)
+	al_terminar_animacion = siguiente
+
+func cancelar_secuencia():
+	al_terminar_animacion = Callable()
+
 # --- DAÑO ---
 
 func preparar_para_golpe():
@@ -958,11 +975,14 @@ func aturdir(atacante_x = null, empuje = EMPUJE_GOLPE, distancia_max = -1.0):
 
 	velocity.y = -300.0
 
+	timer_aturdido = TIEMPO_ATURDIDO
 	reproducir_animacion("recibe_danio")
-	await anim.animation_finished
+	anim.frame = 0
 
+func terminar_aturdimiento():
 	velocity.x = 0
 	esta_herido = false
+	timer_aturdido = 0.0
 	empuje_distancia_max = -1.0
 
 func limitar_empuje(delta):
@@ -976,6 +996,8 @@ func limitar_empuje(delta):
 func caer_desmayado():
 	quitar_marcador()
 	limpiar_ruta()
+	terminar_aturdimiento()
+	cancelar_secuencia()
 	estado_actual = Estado.DESMAYADO
 	tiene_gorro = false
 	tiempo_desmayado = 0.0
@@ -988,6 +1010,8 @@ func caer_desmayado():
 func entrar_muerte():
 	quitar_marcador()
 	limpiar_ruta()
+	terminar_aturdimiento()
+	cancelar_secuencia()
 	estado_actual = Estado.MUERTO
 	cambiar_icono_estado("")
 	quitar_colision_de_cuerpo()
@@ -1008,8 +1032,9 @@ func morir_general(animacion_caida):
 	anim.flip_h = not anim.flip_h
 	generar_sangre()
 	Sonido.reproducir("muerte_enemigo", global_position)
-	reproducir_animacion(animacion_caida)
-	await anim.animation_finished
+	encadenar(animacion_caida, quedar_muerto)
+
+func quedar_muerto():
 	reproducir_animacion("muerto")
 	set_physics_process(false)
 
@@ -1041,10 +1066,9 @@ func ser_desmayado():
 	estado_actual = Estado.DESMAYADO
 	tiene_gorro = false
 	cambiar_icono_estado("dormido")
-	reproducir_animacion("agarrado_desmayando")
-	await anim.animation_finished
-	if estado_actual == Estado.DESMAYADO:
-		reproducir_animacion("agarrado_desmayando_mantener")
+	encadenar("agarrado_desmayando", func():
+		if estado_actual == Estado.DESMAYADO:
+			reproducir_animacion("agarrado_desmayando_mantener"))
 
 func ser_asesinado():
 	quitar_marcador()
@@ -1062,15 +1086,14 @@ func soltar_cuerpo(es_muerte):
 
 	if es_muerte:
 		quitar_colision_de_cuerpo()
-		reproducir_animacion("muerto")
+		encadenar("muerto")
 		cambiar_icono_estado("")
 	else:
 		tiempo_desmayado = 0.0
 		cambiar_icono_estado("dormido")
-		reproducir_animacion("agarrado_desmayado_cae_al_suelo")
-		await anim.animation_finished
-		if estado_actual == Estado.DESMAYADO:
-			reproducir_animacion("desmayado_idle")
+		encadenar("agarrado_desmayado_cae_al_suelo", func():
+			if estado_actual == Estado.DESMAYADO:
+				reproducir_animacion("desmayado_idle"))
 
 # Rehén soltado (Y) o arrojado (A): cae, se recupera enseguida y queda en alerta
 func ser_soltado(impulso = Vector2.ZERO):
@@ -1116,12 +1139,11 @@ func despertarse():
 	estado_actual = Estado.LEVANTANDOSE
 	tiempo_desmayado = 0.0
 	cambiar_icono_estado("")
-	anim.play("empieza_a_levantarse")
-	await anim.animation_finished
-	anim.play("mira_izquierda_derecha_levantandose")
-	await anim.animation_finished
-	anim.play("se_levanta")
-	await anim.animation_finished
+	encadenar("empieza_a_levantarse", func():
+		encadenar("mira_izquierda_derecha_levantandose", func():
+			encadenar("se_levanta", terminar_de_levantarse)))
+
+func terminar_de_levantarse():
 	if estado_actual != Estado.LEVANTANDOSE:
 		return
 	if despertar_en_alerta:
@@ -1197,6 +1219,11 @@ func soltar_escalera():
 
 func _on_animation_finished():
 	var terminada = anim.animation
+
+	if al_terminar_animacion.is_valid():
+		var siguiente = al_terminar_animacion
+		al_terminar_animacion = Callable()
+		siguiente.call()
 
 	if terminada == "trepa_esquina" or terminada == "trepa_esquina_sin_gorro":
 		var empuje_x = 50 * direccion_x

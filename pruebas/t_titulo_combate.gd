@@ -103,7 +103,16 @@ func _ready():
 		max_dist = max(max_dist, abs(g.global_position.x - j.global_position.x))
 	print("   distancia máxima tras el golpe: %.1f" % max_dist)
 	check(max_dist > 50.0 and max_dist <= 72.0, "el golpe lo aleja pero queda al alcance")
+	# Un segundo golpe reinicia el aturdimiento (antes lo cortaba el final del primero)
 	j.global_position = Vector2(-3000, -3000)
+	await esperar(1.0)
+	g.recibir_dano(g.global_position.x - 20, "puño")
+	await esperar(0.3)
+	g.recibir_dano(g.global_position.x - 20, "puño")
+	await esperar(0.4)
+	check(g.esta_herido, "el segundo golpe reinicia el aturdimiento")
+	await esperar(0.3)
+	check(not g.esta_herido, "el aturdimiento termina después")
 	await esperar(0.5)
 
 	# --- 3) Guardia que descubre a un compañero caído ---
@@ -114,6 +123,9 @@ func _ready():
 	a.terminar_vuelta()
 	if a.direccion_x != 1:
 		a.dar_vuelta()
+	# Tramo de piso despejado al principio del nivel (entre la caja y los arbustos)
+	a.global_position = Vector2(1180, 959.9)
+	a.velocity = Vector2.ZERO
 	b.global_position = a.global_position + Vector2(300, 0)
 	await get_tree().physics_frame
 	b.caer_desmayado()
