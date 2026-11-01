@@ -28,7 +28,7 @@ func _physics_process(delta):
 		var cuerpo = choque.collider
 		if cuerpo.is_in_group("jugador"):
 			if cuerpo.has_method("morir"):
-				cuerpo.morir("Te alcanzó un disparo de arcabuz.")
+				cuerpo.morir("Te alcanzó un disparo de arcabuz.", global_position - direccion * 40.0, "bala_impacto")
 		else:
 			Sonido.reproducir("bala_impacto", global_position)
 		queue_free()

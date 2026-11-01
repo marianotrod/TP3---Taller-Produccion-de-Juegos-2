@@ -33,6 +33,11 @@ const CARGA_POR_SEGUNDO = 1200.0
 const ZONA_GOLPE_DESDE = Vector2(-5, -100)
 const ZONA_GOLPE_HASTA = Vector2(70, 50)
 
+# --- GOLPE MORTAL (feedback) ---
+const PAUSA_IMPACTO = 0.15        # Segundos reales en que el juego casi se congela al recibir el golpe
+const ZOOM_MUERTE = 1.15
+const ESCENA_SANGRE = preload("res://scenes/efecto_sangre.tscn")
+
 const Mapa = preload("res://scripts/mapa.gd")
 
 var nivel_ocultamiento = 0
@@ -82,6 +87,10 @@ var ataque_encolado = false
 
 var timer_pasos = 0.0
 var estaba_en_suelo = true
+
+var invulnerable = false          # Depuración (F3 en mundo.gd): los golpes se muestran pero no matan
+var ultimo_golpe_ms = -100000
+var azar_efectos = RandomNumberGenerator.new()   # Propio, para no alterar el azar de la IA
 
 func _ready():
 	Engine.time_scale = 1.0
@@ -647,10 +656,78 @@ func _on_animation_finished():
 
 # --- MUERTE ---
 
-func morir(razon_muerte: String = "Fuiste neutralizado."):
+# desde: de dónde vino el golpe (guardia o bala). Con eso se muestra el impacto.
+func morir(razon_muerte: String = "Fuiste neutralizado.", desde = null, sonido = "cuchillo_corte"):
+	if esta_muerto:
+		return
+	if desde != null:
+		if invulnerable:
+			# Muestra el golpe como mucho una vez por segundo, sin morir
+			if Time.get_ticks_msec() - ultimo_golpe_ms > 1000:
+				ultimo_golpe_ms = Time.get_ticks_msec()
+				mostrar_impacto(desde, sonido, false)
+			return
+		mostrar_impacto(desde, sonido, true)
+	elif invulnerable:
+		return
 	_morir(razon_muerte, ["aterriza_en_el_piso", "aterriza_en_el_piso_danio"])
 
+func mostrar_impacto(desde, sonido, mortal):
+	# Gira hacia quien la golpeó para que se lea de dónde vino
+	if desde.x != global_position.x:
+		facing_left = desde.x < global_position.x
+		anim.flip_h = facing_left
+	Sonido.reproducir(sonido, global_position, 4.0)
+	var sangre = ESCENA_SANGRE.instantiate()
+	get_parent().add_child(sangre)
+	sangre.global_position = global_position + Vector2(0, -15)
+	destello_rojo(0.55 if mortal else 0.3)
+	sacudir_camara(14.0 if mortal else 6.0)
+	if mortal:
+		var tween = create_tween()
+		tween.tween_property($Camera2D, "zoom", Vector2.ONE * ZOOM_MUERTE, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	pausa_de_impacto()
+
+func pausa_de_impacto():
+	# Se mide con el reloj real: los timers de la escena dependen de la escala de tiempo
+	var escala_previa = Engine.time_scale
+	Engine.time_scale = 0.05
+	var fin = Time.get_ticks_msec() + int(PAUSA_IMPACTO * 1000.0)
+	while Time.get_ticks_msec() < fin:
+		await get_tree().process_frame
+	Engine.time_scale = escala_previa
+
+func destello_rojo(intensidad):
+	var capa = CanvasLayer.new()
+	capa.layer = 90
+	var rect = ColorRect.new()
+	rect.color = Color(0.8, 0.0, 0.0, intensidad)
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	capa.add_child(rect)
+	add_child(capa)
+	await en_tiempo_real(0.6, func(t): rect.color.a = intensidad * (1.0 - t))
+	capa.queue_free()
+
+func sacudir_camara(fuerza):
+	var camara = $Camera2D
+	await en_tiempo_real(0.35, func(t):
+		camara.offset = Vector2(azar_efectos.randf_range(-1, 1), azar_efectos.randf_range(-1, 1)) * fuerza * (1.0 - t))
+	camara.offset = Vector2.ZERO
+
+# Llama a paso(t) con t de 0 a 1 durante "duracion" segundos reales, sin importar la
+# escala de tiempo (los tweens y timers se aceleran o frenan con ella).
+func en_tiempo_real(duracion, paso: Callable):
+	var inicio = Time.get_ticks_msec()
+	var t = 0.0
+	while t < 1.0:
+		t = min((Time.get_ticks_msec() - inicio) / (duracion * 1000.0), 1.0)
+		paso.call(t)
+		await get_tree().process_frame
+
 func morir_por_caida():
+	if invulnerable:
+		return
 	_morir("La caída fue demasiado alta.", ["aterriza_en_el_piso_danio"], false, true)
 
 func morir_en_vacio():

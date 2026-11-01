@@ -230,7 +230,7 @@ func _physics_process(delta):
 			var collider = colision.get_collider()
 			if collider and collider.is_in_group("jugador"):
 				if collider.has_method("morir"):
-					collider.morir("Un guardia te ha descubierto y ejecutado.")
+					collider.morir("Un guardia te ha descubierto y ejecutado.", global_position)
 
 	actualizar_animaciones()
 	queue_redraw()
@@ -624,7 +624,7 @@ func comportamiento_agresivo(delta):
 		if abs(dif.x) < DISTANCIA_ATAQUE.x and abs(dif.y) < DISTANCIA_ATAQUE.y:
 			velocity.x = 0
 			if jugador.has_method("morir"):
-				jugador.morir("Un guardia te ha descubierto y ejecutado.")
+				jugador.morir("Un guardia te ha descubierto y ejecutado.", global_position)
 			return
 		# Persecución: se recalcula la ruta seguido porque el jugador se mueve
 		timer_repath -= delta

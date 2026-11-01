@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 
-PRUEBAS = ["t_mecanicas", "t_nuevos", "t_persecucion", "t_ia", "t_titulo_combate"]
+PRUEBAS = ["t_mecanicas", "t_nuevos", "t_persecucion", "t_ia", "t_titulo_combate", "t_muerte"]
 ARGS_EXTRA = {"t_titulo_combate": ["con_titulo"]}
 GODOT = os.environ.get("GODOT", "godot")
 

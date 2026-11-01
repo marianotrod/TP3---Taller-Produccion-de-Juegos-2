@@ -152,7 +152,8 @@ func _physics_process(_delta):
 		f.call()
 	registrar()
 	cuadro += 1
-	if cuadro >= CUADROS:
+	# Termina al morir: el congelado del golpe dura tiempo real y desde ahí deja de ser determinístico
+	if cuadro >= CUADROS or (is_instance_valid(j) and j.esta_muerto):
 		var archivo = FileAccess.open(salida, FileAccess.WRITE)
 		archivo.store_string("\n".join(lineas) + "\n")
 		archivo.close()
