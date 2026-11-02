@@ -3,7 +3,8 @@ extends Node
 # --- SISTEMA DE RUIDO ---
 # Cualquier acción ruidosa llama a Ruido.emitir(posicion, radio).
 # Los enemigos dentro del radio reciben oir_ruido() y reaccionan.
-# F1 muestra/oculta los círculos de ruido (útil para ajustar radios).
+# Los círculos de ruido son parte del juego: muestran qué tan lejos se oyó cada acción.
+# F1 (en mundo.gd) muestra/oculta la depuración: conos de visión y marcadores de los guardias.
 
 const RADIO = {
 	"paso_combate": 260.0,
@@ -22,14 +23,8 @@ const RADIO = {
 	"disparo": 700.0,
 }
 
-var mostrar_circulos = true
-var _f1_previo = false
-
-func _process(_delta):
-	var f1 = Input.is_physical_key_pressed(KEY_F1)
-	if f1 and not _f1_previo:
-		mostrar_circulos = not mostrar_circulos
-	_f1_previo = f1
+var mostrar_circulos = true      # Siempre activos (las pruebas los apagan)
+var mostrar_depuracion = false   # Conos de visión y marcadores de interés (F1)
 
 func emitir(posicion: Vector2, radio, fuente = null):
 	if radio is String:

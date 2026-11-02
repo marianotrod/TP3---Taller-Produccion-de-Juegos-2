@@ -17,5 +17,5 @@ func _process(delta):
 
 func _draw():
 	var t = tiempo / DURACION
-	var color = Color(1.0, 0.9, 0.4, 0.5 * (1.0 - t))
+	var color = Color(1.0, 0.9, 0.4, 0.25 * (1.0 - t))
 	draw_arc(Vector2.ZERO, radio * (0.6 + 0.4 * t), 0, TAU, 48, color, 3.0)

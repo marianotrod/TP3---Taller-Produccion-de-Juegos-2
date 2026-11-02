@@ -1241,7 +1241,7 @@ func _on_animation_finished():
 # --- DEBUG (F1): cono de visión según el estado ---
 
 func _draw():
-	if not Ruido.mostrar_circulos or estado_actual in [Estado.MUERTO, Estado.DESMAYADO, Estado.AGARRADO]:
+	if not Ruido.mostrar_depuracion or estado_actual in [Estado.MUERTO, Estado.DESMAYADO, Estado.AGARRADO]:
 		return
 	var color = Color(0.4, 1.0, 0.4, 0.15)
 	if estado_actual == Estado.SOSPECHANDO:

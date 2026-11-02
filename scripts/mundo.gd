@@ -1,7 +1,7 @@
 extends Node2D
 
 # --- ATAJOS DE DEPURACIÓN (activos también en la versión web, para que los use el equipo) ---
-# F1: círculos de ruido y conos de visión (en ruido.gd)
+# F1: conos de visión y marcadores de los guardias (los círculos de ruido se ven siempre)
 # F2: lleva a la jugadora cerca del próximo tirador
 # F3: invulnerable (los golpes se muestran pero no matan)
 # Backspace: muestra/oculta las formas de colisión (como --debug-collisions)
@@ -57,6 +57,9 @@ func _unhandled_input(event):
 		return
 	if event.physical_keycode == KEY_BACKSPACE:
 		alternar_colisiones_visibles()
+		return
+	if event.physical_keycode == KEY_F1:
+		Ruido.mostrar_depuracion = not Ruido.mostrar_depuracion
 		return
 	var jugador = get_tree().get_first_node_in_group("jugador")
 	if jugador == null or jugador.esta_muerto:

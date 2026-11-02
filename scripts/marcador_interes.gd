@@ -14,7 +14,7 @@ func _process(delta):
 	queue_redraw()
 
 func _draw():
-	if not Ruido.mostrar_circulos:
+	if not Ruido.mostrar_depuracion:
 		return
 	var pulso = 0.6 + 0.4 * sin(tiempo * 5.0)
 	var color = Color(1.0, 0.75, 0.15, 0.9 * pulso)
